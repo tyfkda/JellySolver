@@ -83,6 +83,18 @@ module Jelly
             end
         end
 
+        def overlap?(other, newx, newy)
+            if @x + @shape.w <= newx || newx + other.shape.w <= @x
+                return false
+            end
+
+            y0 = [@y, newy].max
+            y1 = [@y + @shape.h, newy + other.shape.h].min
+            (y0...y1).any? do |y|
+                ((@shape.lines[y - @y] << @x) & (other.shape.lines[y - newy] << newx)) != 0
+            end
+        end
+
         def merge(other)
             dx = other.x - @x
             dy = other.y - @y

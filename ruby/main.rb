@@ -1,6 +1,8 @@
 #! /usr/bin/env ruby
 
 require_relative 'jelly/jelly'
+require_relative 'jelly/solver'
+require_relative 'jelly/stage'
 require_relative 'jelly/stage_parser'
 
 def disp_stage(stage)
@@ -17,7 +19,12 @@ def main(fn)
     end
 
     disp_stage(stage)
-    p stage.jellies
+
+    solver = Jelly::Solver.new()
+    solver.solve(stage) do |next_stage, move|
+        p move
+        disp_stage(next_stage)
+    end
 end
 
 if __FILE__ == $0
