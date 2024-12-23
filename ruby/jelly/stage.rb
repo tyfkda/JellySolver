@@ -9,6 +9,15 @@ module Jelly
             @jellies = jellies
         end
 
+        def solved?()
+            h = Set.new()
+            @jellies.each do |jelly|
+                return false if h.include?(jelly.color)
+                h.add(jelly.color)
+            end
+            return true
+        end
+
         def can_move?(jelly, dx, dy)
             newx = jelly.x + dx
             newy = jelly.y + dy
@@ -107,6 +116,11 @@ module Jelly
                 end
             end
             return lines
+        end
+
+        def node_key()
+            # return @jellies.sort()
+            return @jellies.sort().hash  # 衝突しないことを祈る
         end
     end
 end

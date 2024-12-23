@@ -35,6 +35,10 @@ module Jelly
             @adjacent_lines = adjacent_lines
         end
 
+        def occupy_position?(x, y)
+            return @positions.include?([x, y])
+        end
+
         def concatenated(shape, dx, dy)
             positions = @positions.map(&:dup)
             if dx < 0
@@ -59,6 +63,14 @@ module Jelly
         def inspect
             return "#<JellyShape: w=#{w},h=#{h} positions=#{@positions}>"
         end
+
+        def hash()
+            return @positions.hash
+        end
+
+        def eql?(other)
+            return @positions == other.positions
+        end
     end
 
     class Jelly
@@ -69,6 +81,10 @@ module Jelly
             @y = y
             @color = color
             @shape = shape
+        end
+
+        def occupy_position?(x, y)
+            return @shape.occupy_position?(x - @x, y - @y)
         end
 
         def adjacent?(other)
@@ -105,6 +121,22 @@ module Jelly
 
         def inspect
             return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@color}, shape=#{@shape.inspect}>"
+        end
+
+        def hash()
+            return [@x, @y, @color, @shape.object_id].hash  # shapeが同じ形のものは同じオブジェクトなので、object_idで代用
+        end
+
+        def eql?(other)
+            return @x == other.x && @y == other.y && @color == other.color &&
+                   @shape == other.shape
+        end
+
+        def <=>(other)
+            return @y <=> other.y if @y != other.y
+            return @x <=> other.x if @x != other.x
+            return @shape.h <=> other.shape.h if @shape.h != other.shape.h
+            @shape.w <=> other.shape.w if @shape.w != other.shape.w
         end
     end
 end

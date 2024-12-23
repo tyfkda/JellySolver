@@ -1,7 +1,55 @@
 module Jelly
     class Solver
+        attr_reader :check_count
+
+        def initialize(quiet: false)
+            @quiet = quiet
+        end
+
         def solve(stage, &block)
-            enumerate_next(stage, &block)
+            key = stage.node_key()
+            que = []
+            que << [stage, key]
+            nodes = {}
+            nodes[key] = [nil, nil]
+            check_count = 0
+
+            until que.empty?
+                stage, key = que.shift
+                check_count += 1
+
+                unless @quiet
+                    $stderr.print "\rCheck=#{check_count}, left=#{que.size}\x1b[0K"
+                end
+                if stage.solved?()
+                    @check_count = check_count
+                    moves = extract_moves(nodes, key)
+                    if block.nil? || block.call(moves)
+                        return moves
+                    end
+                end
+
+                enumerate_next(stage) do |next_stage, move|
+                    next_key = next_stage.node_key()
+                    unless nodes.has_key?(next_key)
+                        nodes[next_key] = [key, move]
+                        que << [next_stage, next_key]
+                    end
+                end
+            end
+            @check_count = check_count
+            return nil
+        end
+
+        def extract_moves(nodes, key)
+            moves = []
+            while true
+                prev_key, move = nodes[key]
+                break unless prev_key
+                moves << move
+                key = prev_key
+            end
+            return moves.reverse!
         end
 
         def enumerate_next(stage, &block)
