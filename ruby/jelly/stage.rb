@@ -31,23 +31,56 @@ module Jelly
             return Stage.new(@wall_lines, jellies)
         end
 
+        # 動かせるなら、動かした結果のStageを返す
+        # 自分がfreezeされている場合新しいStageを生成、されていなければ自分自身を書き換える
         def can_move?(jelly, dx, dy)
+            moves = can_move_recur(jelly, dx, dy)
+            return nil if moves.nil?
+
+            return move_jellies(moves, dx, dy)
+        end
+
+        def move_jellies(moves, dx, dy)
+            if frozen?
+                jellies = @jellies.dup()  # jelliesの中身はfrozenのままとしておく
+                updated = Stage.new(@wall_lines, jellies)
+                return updated.move_jellies(moves, dx, dy)
+            end
+
+            moves.each do |jelly|
+                if jelly.frozen?
+                    index = @jellies.find_index(jelly)
+                    raise "jelly not found" if index.nil?
+                    jelly = jelly.dup()
+                    @jellies[index] = jelly
+                end
+                jelly.x += dx
+                jelly.y += dy
+            end
+            return self
+        end
+
+        # 対象のゼリーが動かせるなら、動かした結果のゼリーの集合を返す
+        def can_move_recur(jelly, dx, dy, moves = nil)
             newx = jelly.x + dx
             newy = jelly.y + dy
             # 壁との衝突判定
             jelly.shape.lines.each_with_index do |line, i|
                 if (@wall_lines[newy + i] & (line << newx)) != 0
-                    return false
+                    return nil
                 end
             end
+
+            moves ||= Set.new()
+            moves.add(jelly)
             # 他のゼリーとの衝突判定
             @jellies.each do |other|
-                next if other.eql?(jelly)
-                if other.overlap?(jelly, newx, newy)
-                    return false
-                end
+                next if moves.include?(other)
+                next unless other.overlap?(jelly, newx, newy)
+                moves = can_move_recur(other, dx, dy, moves)
+                return nil if moves.nil?
             end
-            return true
+            return moves
         end
 
         def free_fall(fall_info = nil)

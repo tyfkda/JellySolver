@@ -69,12 +69,8 @@ module Jelly
         end
 
         def self.move_jelly(stage, jelly, dx)
-            return nil unless stage.can_move?(jelly, dx, 0)
-
-            i = stage.jellies.index(jelly)
-            cloned = stage.jellies.dup()
-            cloned[i] = Jelly.new(jelly.x + dx, jelly.y, jelly.color, jelly.shape)
-            updated = Stage.new(stage.wall_lines, cloned)
+            updated = stage.can_move?(jelly, dx, 0)
+            return nil if updated.nil?
 
             fall_info = nil
             while (fall_info = updated.free_fall(fall_info))
