@@ -18,6 +18,19 @@ module Jelly
             return true
         end
 
+        def freeze()
+            # ブロックはすでに固定済みと仮定
+            super()
+            @jellies.each(&:freeze)
+            @jellies.freeze()
+            return self
+        end
+
+        def dup()
+            jellies = @jellies.map(&:dup)
+            return Stage.new(@wall_lines, jellies)
+        end
+
         def can_move?(jelly, dx, dy)
             newx = jelly.x + dx
             newy = jelly.y + dy
@@ -73,16 +86,35 @@ module Jelly
             return nil if jellies.empty?
 
             jellies.each_with_index do |jelly, i|
-                index = @jellies.find_index(jelly)
-                raise "jelly not found" if index.nil?
-                jelly = jelly.dup()
-                @jellies[index] = jellies[i] = jelly
+                if jelly.frozen?
+                    index = @jellies.find_index(jelly)
+                    raise "jelly not found" if index.nil?
+                    jelly = jelly.dup()
+                    @jellies[index] = jellies[i] = jelly
+                end
                 jelly.y += 1
             end
             return fall_info || [wall_lines, jellies]
         end
 
         def merge_jellies()
+            # frozenじゃないjellyを前に移動
+            i = 0
+            j = @jellies.length - 1
+            while true
+                while i < j && !@jellies[i].frozen?
+                    i += 1
+                end
+                while i < j && @jellies[j].frozen?
+                    j -= 1
+                end
+                break if i >= j
+                @jellies[i], @jellies[j] = @jellies[j], @jellies[i]
+                i += 1
+                j -= 1
+            end
+
+            # その状態で前から辿ると、frozenじゃないjellyにマージされる
             @jellies.each_with_index do |jelly, i|
                 next if jelly.nil?
 
@@ -94,7 +126,7 @@ module Jelly
                         next
                     end
                     if jelly.adjacent?(other)
-                        jelly = jellies[i] = jelly.dup()
+                        raise "Invalid" if jelly.frozen?
                         jelly.merge(other)
                         @jellies[j] = nil
                         # Try again.

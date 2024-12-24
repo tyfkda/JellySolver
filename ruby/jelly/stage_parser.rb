@@ -40,6 +40,7 @@ module Jelly
                 wall_lines << line_bits
             end
             wall_lines << (1 << width) - 1
+            wall_lines.freeze()
 
             stage = Stage.new(wall_lines, jellies)
             stage.merge_jellies()

@@ -7,6 +7,7 @@ module Jelly
         end
 
         def solve(stage, &block)
+            stage.freeze()
             key = stage.node_key()
             que = []
             que << [stage, key]
@@ -33,6 +34,7 @@ module Jelly
                     next_key = next_stage.node_key()
                     unless nodes.has_key?(next_key)
                         nodes[next_key] = [key, move]
+                        next_stage.freeze()
                         que << [next_stage, next_key]
                     end
                 end

@@ -37,7 +37,7 @@ def main(fn, options = {})
     unless moves.nil?
         unless options[:quiet]
             $stderr.puts "\rSolved!\x1b[0K"
-            disp_solution(stage, moves)
+            disp_solution(stage.dup(), moves)
         end
         puts "Steps=#{moves.length}, check=#{solver.check_count}, elapsed=#{sprintf("%.3f", end_time - start_time)}s"
         return true

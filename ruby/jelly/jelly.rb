@@ -4,8 +4,10 @@ module Jelly
 
         def self.register_shape(positions)
             positions.sort!
+            positions.freeze()
             unless @@shapes.has_key?(positions)
                 shape = JellyShape.new(positions)
+                shape.freeze()
                 @@shapes[positions] = shape
             end
             return @@shapes[positions]
