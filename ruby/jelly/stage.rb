@@ -12,6 +12,7 @@ module Jelly
         def solved?()
             h = Set.new()
             @jellies.each do |jelly|
+                next if jelly.color == BLACK
                 return false if h.include?(jelly.color)
                 h.add(jelly.color)
             end
@@ -153,7 +154,7 @@ module Jelly
 
             # その状態で前から辿ると、frozenじゃないjellyにマージされる
             @jellies.each_with_index do |jelly, i|
-                next if jelly.nil?
+                next if jelly.nil? || jelly.color == BLACK
 
                 j = i + 1
                 while j < @jellies.length
@@ -181,7 +182,11 @@ module Jelly
             end
             @jellies.each do |jelly|
                 c = jelly.color
-                c = c.downcase if jelly.locked
+                if c == BLACK
+                    c = jelly.black_char
+                else
+                    c = c.downcase if jelly.locked
+                end
                 jelly.shape.positions.each do |pos|
                     lines[pos[1] + jelly.y][pos[0] + jelly.x] = c
                 end

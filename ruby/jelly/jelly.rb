@@ -78,6 +78,7 @@ module Jelly
     class Jelly
         attr_accessor :x, :y, :color, :shape
         attr_accessor :locked
+        attr_accessor :black_char
 
         def initialize(x, y, color, shape, locked = false)
             @x = x
@@ -125,7 +126,7 @@ module Jelly
         end
 
         def inspect
-            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}}>"
+            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@black_char || @color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}}>"
         end
 
         def hash()
