@@ -20,9 +20,11 @@ module Jelly
             stage_array.each_with_index do |row, y|
                 line_bits = 1 | (1 << (width - 1))
                 row.each_with_index do |cell, x|
-                    if RE_JELLY_CHARS.match?(cell)
-                        color = cell
-                        single_jelly = Jelly.new(x + 1, y + 1, color, shape1)
+                    c = cell.upcase
+                    if RE_JELLY_CHARS.match?(c)
+                        color = c
+                        locked = c != cell
+                        single_jelly = Jelly.new(x + 1, y + 1, color, shape1, locked)
                         jellies << single_jelly
                         next
                     end

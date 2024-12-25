@@ -77,12 +77,14 @@ module Jelly
 
     class Jelly
         attr_accessor :x, :y, :color, :shape
+        attr_accessor :locked
 
-        def initialize(x, y, color, shape)
+        def initialize(x, y, color, shape, locked = false)
             @x = x
             @y = y
             @color = color
             @shape = shape
+            @locked = locked
         end
 
         def occupy_position?(x, y)
@@ -119,10 +121,11 @@ module Jelly
             @x = [@x, other.x].min
             @y = [@y, other.y].min
             @shape = @shape.concatenated(other.shape, dx, dy)
+            @locked ||= other.locked
         end
 
         def inspect
-            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@color}, shape=#{@shape.inspect}>"
+            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}}>"
         end
 
         def hash()

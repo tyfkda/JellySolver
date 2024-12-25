@@ -34,6 +34,7 @@ module Jelly
         # 動かせるなら、動かした結果のStageを返す
         # 自分がfreezeされている場合新しいStageを生成、されていなければ自分自身を書き換える
         def can_move?(jelly, dx, dy)
+            return nil if jelly.locked
             moves = can_move_recur(jelly, dx, dy)
             return nil if moves.nil?
 
@@ -77,6 +78,7 @@ module Jelly
             @jellies.each do |other|
                 next if moves.include?(other)
                 next unless other.overlap?(jelly, newx, newy)
+                return nil if other.locked
                 moves = can_move_recur(other, dx, dy, moves)
                 return nil if moves.nil?
             end
@@ -97,11 +99,13 @@ module Jelly
                 while i < jellies.length
                     jelly = jellies[i]
                     # 壁に接地しているか？
-                    grounded = false
-                    jelly.shape.lines.each_with_index do |line, j|
-                        if wall_lines[jelly.y + j + 1] & (line << jelly.x) != 0
-                            grounded = true
-                            break
+                    grounded = jelly.locked
+                    unless grounded
+                        jelly.shape.lines.each_with_index do |line, j|
+                            if wall_lines[jelly.y + j + 1] & (line << jelly.x) != 0
+                                grounded = true
+                                break
+                            end
                         end
                     end
                     if grounded
@@ -176,8 +180,10 @@ module Jelly
                 line.to_s(2).reverse.gsub('0', EMPTY_CHAR).gsub('1', WALL_CHAR)
             end
             @jellies.each do |jelly|
+                c = jelly.color
+                c = c.downcase if jelly.locked
                 jelly.shape.positions.each do |pos|
-                    lines[pos[1] + jelly.y][pos[0] + jelly.x] = jelly.color
+                    lines[pos[1] + jelly.y][pos[0] + jelly.x] = c
                 end
             end
             return lines
