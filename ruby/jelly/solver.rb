@@ -68,7 +68,9 @@ module Jelly
         end
 
         def enumerate_next(stage, &block)
+            skips = Set.new()
             stage.jellies.each do |jelly|
+                next if skips.include?(jelly)
                 2.times do |j|
                     dx = j * 2 - 1
                     updated = Solver.move_jelly(stage, jelly, dx)
@@ -77,6 +79,11 @@ module Jelly
                         move = [jelly.x + top[0], jelly.y + top[1], dx]
                         block.call(updated, move)
                     end
+                end
+
+                unless jelly.link_next.nil?
+                    other = jelly
+                    skips.add(other) while (other = other.link_next) != jelly
                 end
             end
         end

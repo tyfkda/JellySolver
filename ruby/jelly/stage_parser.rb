@@ -47,9 +47,59 @@ module Jelly
             wall_lines << (1 << width) - 1
             wall_lines.freeze()
 
+            extra = parse_extra(f, width, height, wall_lines, jellies)
+            extra[:links]&.each do |link|
+                top = link.shift
+                link.each do |jelly|
+                    top.link(jelly)
+                    top = jelly
+                end
+            end
+
             stage = Stage.new(wall_lines, jellies)
             stage.merge_jellies()
             return stage
+        end
+
+        def parse_extra(f, width, height, wall_lines, jellies)
+            links = []
+            while line = f.gets
+                case line.chomp
+                when %r!^//!
+                    # Comment
+                    next
+                when /^link\s+(\d+),(\d+),([<>^v])$/
+                    x = $1.to_i
+                    y = $2.to_i
+                    dir = $3
+                    if x >= 1 && x < width - 1 || y >= 1 || y < height - 1 || DIRS.key?(dir)
+                        d = DIRS[dir]
+                        jelly = jellies.find {|jelly| jelly.occupy_position?(x, y)}
+                        dest = jellies.find {|jelly| jelly.occupy_position?(x + d[0], y + d[1])}
+                        if jelly && dest
+                            done = false
+                            links.each do |link|
+                                if link.include?(jelly)
+                                    link << dest
+                                    done = true
+                                    break
+                                elsif link.include?(dest)
+                                    link << jelly
+                                    done = true
+                                    break
+                                end
+                            end
+                            links << [jelly, dest] unless done
+                            next
+                        end
+                    end
+                end
+                raise "Invalid format: #{line}"
+            end
+
+            return {
+                links: links,
+            }
         end
 
         def parse_black_block(stage_array, x, y)

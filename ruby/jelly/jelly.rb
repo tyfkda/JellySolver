@@ -79,6 +79,7 @@ module Jelly
         attr_accessor :x, :y, :color, :shape
         attr_accessor :locked
         attr_accessor :black_char
+        attr_accessor :link_prev, :link_next
 
         def initialize(x, y, color, shape, locked = false)
             @x = x
@@ -86,6 +87,7 @@ module Jelly
             @color = color
             @shape = shape
             @locked = locked
+            @link_prev = @link_next = nil
         end
 
         def occupy_position?(x, y)
@@ -117,6 +119,7 @@ module Jelly
         end
 
         def merge(other)
+            # マージのみ、otherがリンクを形成していてもなにもしない
             dx = other.x - @x
             dy = other.y - @y
             @x = [@x, other.x].min
@@ -125,8 +128,51 @@ module Jelly
             @locked ||= other.locked
         end
 
+        def link(other)
+            @link_prev = @link_next = self if @link_next.nil?
+            other.link_prev = other.link_next = other if other.link_next.nil?
+
+            next1 = @link_next
+            prev2 = other.link_prev
+
+            @link_next = other
+            next1.link_prev = prev2
+            other.link_prev = self
+            prev2.link_next = next1
+        end
+
+        def contains_link?(other)
+            return false if @link_next.nil?
+            q = self
+            while (q = q.link_next) != self
+                return true if q == other
+            end
+            return false
+        end
+
+        # frozen解除：複製したJellyを返す
+        # リンクがある場合、それらも複製する
+        def unfrozen()
+            return self unless frozen?
+
+            return self.dup() if @link_next.nil?
+
+            jelly = self
+            result = nil
+            while true
+                cloned = jelly.dup()
+                cloned.link_next = cloned.link_prev = nil
+                result.link(cloned) unless result.nil?
+                result = cloned
+
+                jelly = jelly.link_next
+                break if jelly == self
+            end
+            return result.link_next
+        end
+
         def inspect
-            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@black_char || @color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}}>"
+            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@black_char || @color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}#{@link_next ? ' link' : ''}}>"
         end
 
         def hash()

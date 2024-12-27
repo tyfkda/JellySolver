@@ -2,6 +2,32 @@ require_relative 'const'
 
 module Jelly
     class Stage
+        def self.unfrozen_jelly(jellies, jelly)
+            return jelly unless jelly.frozen?
+
+            result = jelly.unfrozen()
+
+            # 配列も置き換える
+            src = jelly
+            dst = result
+            while true
+                i = jellies.find_index {|target| target == src}
+                raise "jelly not found" if i.nil?
+                jellies[i] = dst
+
+                src = src.link_next
+                dst = dst.link_next
+                break if src.nil? || src == jelly
+            end
+            return result
+        end
+
+        def self.settle_jelly(wall_lines, jelly)
+            jelly.shape.lines.each_with_index do |line, j|
+                wall_lines[jelly.y + j] |= (line << jelly.x)
+            end
+        end
+
         attr_accessor :wall_lines, :jellies
         attr_accessor :distance
 
@@ -37,7 +63,28 @@ module Jelly
         end
 
         def dup()
-            jellies = @jellies.map(&:dup)
+            return self if !frozen?
+
+            jellies = @jellies.dup()
+            jellies.each_with_index do |jelly, i|
+                next unless jelly.frozen?
+                if jelly.link_next.nil?
+                    jellies[i] = jelly.unfrozen()
+                    next
+                end
+
+                dst = jelly.unfrozen()
+                src = jelly
+                while true
+                    i = jellies.find_index(src)
+                    raise "jelly not found" unless i
+                    jellies[i] = dst
+
+                    src = src.link_next
+                    dst = dst.link_next
+                    break if src.nil? || src == jelly
+                end
+            end
             return Stage.new(@wall_lines, jellies)
         end
 
@@ -59,38 +106,62 @@ module Jelly
             end
 
             moves.each do |jelly|
+                unless jelly.link_next.nil?
+                    other = jelly
+                    while (other = other.link_next) != jelly
+                        moves.delete(other)
+                    end
+                end
                 if jelly.frozen?
-                    index = @jellies.find_index(jelly)
-                    raise "jelly not found" if index.nil?
-                    jelly = jelly.dup()
-                    @jellies[index] = jelly
+                    jelly = Stage.unfrozen_jelly(@jellies, jelly)
                 end
                 jelly.x += dx
                 jelly.y += dy
+                unless jelly.link_next.nil?
+                    other = jelly
+                    while (other = other.link_next) != jelly
+                        other.x += dx
+                        other.y += dy
+                    end
+                end
             end
             return self
         end
 
         # 対象のゼリーが動かせるなら、動かした結果のゼリーの集合を返す
         def can_move_recur(jelly, dx, dy, moves = nil)
-            newx = jelly.x + dx
-            newy = jelly.y + dy
             # 壁との衝突判定
-            jelly.shape.lines.each_with_index do |line, i|
-                if (@wall_lines[newy + i] & (line << newx)) != 0
-                    return nil
+            other = jelly
+            while true
+                newx = other.x + dx
+                newy = other.y + dy
+                other.shape.lines.each_with_index do |line, i|
+                    if (@wall_lines[newy + i] & (line << newx)) != 0
+                        return nil
+                    end
                 end
+                other = other.link_next
+                break if other.nil? || other == jelly
             end
 
             moves ||= Set.new()
             moves.add(jelly)
+            unless jelly.link_next.nil?
+                other = jelly
+                moves.add(other) while (other = other.link_next) != jelly
+            end
             # 他のゼリーとの衝突判定
-            @jellies.each do |other|
-                next if moves.include?(other)
-                next unless other.overlap?(jelly, newx, newy)
-                return nil if other.locked
-                moves = can_move_recur(other, dx, dy, moves)
-                return nil if moves.nil?
+            top = jelly
+            while true
+                @jellies.each do |other|
+                    next if moves.include?(other)
+                    next unless other.overlap?(jelly, jelly.x + dx, jelly.y + dy)
+                    return nil if other.locked
+                    moves = can_move_recur(other, dx, dy, moves)
+                    return nil if moves.nil?
+                end
+                jelly = jelly.link_next
+                break if jelly.nil? || jelly == top
             end
             return moves
         end
@@ -119,10 +190,17 @@ module Jelly
                         end
                     end
                     if grounded
-                        jelly.shape.lines.each_with_index do |line, j|
-                            wall_lines[jelly.y + j] |= (line << jelly.x)
-                        end
+                        Stage.settle_jelly(wall_lines, jelly)
                         jellies.delete_at(i)
+                        unless jelly.link_next.nil?
+                            linked = jelly
+                            while (linked = linked.link_next) != jelly
+                                j = jellies.find_index(linked)
+                                next if j.nil?
+                                Stage.settle_jelly(wall_lines, linked)
+                                jellies.delete_at(j)
+                            end
+                        end
                         again = true
                         next
                     end
@@ -132,12 +210,22 @@ module Jelly
             end
             return nil if jellies.empty?
 
-            jellies.each_with_index do |jelly, i|
+            jellies.each do |jelly|
                 if jelly.frozen?
-                    index = @jellies.find_index(jelly)
-                    raise "jelly not found" if index.nil?
-                    jelly = jelly.dup()
-                    @jellies[index] = jellies[i] = jelly
+                    unfrozen = Stage.unfrozen_jelly(@jellies, jelly)
+
+                    src = jelly
+                    dst = unfrozen
+                    while true
+                        index = jellies.find_index(src)
+                        raise "jelly not found" if index.nil?
+                        jellies[index] = dst
+
+                        src = src.link_next
+                        dst = dst.link_next
+                        break if src.nil? || src == jelly
+                    end
+                    jelly = unfrozen
                 end
                 jelly.y += 1
             end
@@ -176,6 +264,7 @@ module Jelly
                         raise "Invalid" if jelly.frozen?
                         jelly.merge(other)
                         @jellies[j] = nil
+                        link_merged_jelly(jelly, other)
                         # Try again.
                         j = i
                     end
@@ -183,6 +272,47 @@ module Jelly
                 end
             end
             @jellies.compact!
+        end
+
+        def link_merged_jelly(jelly, other)
+            unless other.link_next.nil?
+                if !jelly.link_next.nil? && jelly.contains_link?(other)
+                    # 同じリンク内でくっついた：リンクから取り除く
+                    other.link_prev.link_next = other.link_next
+                    other.link_next.link_prev = other.link_prev
+                else
+                    # other自体はマージされたので、残りのリンクを複製
+                    nxt = other
+                    prv = nil
+                    while true
+                        nxt = nxt.link_next
+                        break if nxt == other
+                        cloned = nxt.dup()
+                        cloned.link_next = cloned.link_prev = cloned
+                        prv.link(cloned) if prv
+                        prv = cloned
+                    end
+                    nxt = prv.link_next
+                    jelly.link(nxt)  # リンク
+
+                    # リンクの更新に従って配列も更新
+                    q = other
+                    r = nxt
+                    while (q = q.link_next) != other
+                        # @jellies.replace(q, r)
+                        k = @jellies.find_index(q)
+                        raise "jelly not found" unless k
+                        @jellies[k] = r
+                        r = r.link_next
+                    end
+                end
+            end
+
+            # ロックを全体に反映
+            if jelly.locked
+                q = jelly
+                q.locked = true while (q = q.link_next) != jelly && !q.nil?
+            end
         end
 
         # クリア状態までの距離を推定
