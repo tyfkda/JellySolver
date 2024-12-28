@@ -3,6 +3,7 @@ require_relative 'const'
 module Jelly
     class Stage
         attr_accessor :wall_lines, :jellies
+        attr_accessor :distance
 
         def initialize(wall_lines, jellies)
             @wall_lines = wall_lines
@@ -182,6 +183,25 @@ module Jelly
                 end
             end
             @jellies.compact!
+        end
+
+        # クリア状態までの距離を推定
+        def estimate_distance()
+            color_jellies = Hash.new {|h, k| h[k] = []}
+            @jellies.each do |jelly|
+                next if jelly.color == BLACK
+                color_jellies[jelly.color] << jelly
+            end
+
+            return color_jellies.values.inject(0) do |acc, array|
+                if array.length < 2
+                    acc
+                else
+                    jl = array.min_by {|jelly| jelly.x}
+                    jr = array.max_by {|jelly| jelly.x + jelly.shape.w}
+                    acc + [jr.x - (jl.x + jl.shape.w), 1].max
+                end
+            end
         end
 
         def make_lines()

@@ -1,25 +1,33 @@
+require_relative 'pqueue'
+
 module Jelly
     class Solver
         attr_reader :check_count
 
-        def initialize(no_prune: false, quiet: false)
+        def initialize(no_prune: false, use_bfs: false, quiet: false)
             @no_prune = no_prune
+            @use_bfs = use_bfs
             @quiet = quiet
         end
 
         def solve(stage, &block)
             detect_constraint(stage) unless @no_prune
 
+            stage.distance = stage.estimate_distance() unless @use_bfs
             stage.freeze()
             key = stage.node_key()
-            que = []
-            que << [stage, key]
+            if @use_bfs
+                que = []
+            else
+                que = PriorityQueue.new() {|x, y| x[0].distance + x[2] <=> y[0].distance + y[2]}
+            end
+            que << [stage, key, 0]
             nodes = {}
             nodes[key] = [nil, nil]
             check_count = 0
 
             until que.empty?
-                stage, key = que.shift
+                stage, key, step = que.shift
                 check_count += 1
 
                 unless @quiet
@@ -38,8 +46,9 @@ module Jelly
                     next_key = next_stage.node_key()
                     unless nodes.has_key?(next_key)
                         nodes[next_key] = [key, move]
+                        next_stage.distance = next_stage.estimate_distance() unless @use_bfs
                         next_stage.freeze()
-                        que << [next_stage, next_key]
+                        que << [next_stage, next_key, step + 1]
                     end
                 end
             end
