@@ -2,11 +2,14 @@ module Jelly
     class Solver
         attr_reader :check_count
 
-        def initialize(quiet: false)
+        def initialize(no_prune: false, quiet: false)
+            @no_prune = no_prune
             @quiet = quiet
         end
 
         def solve(stage, &block)
+            detect_constraint(stage) unless @no_prune
+
             stage.freeze()
             key = stage.node_key()
             que = []
@@ -22,6 +25,7 @@ module Jelly
                 unless @quiet
                     $stderr.print "\rCheck=#{check_count}, left=#{que.size}\x1b[0K"
                 end
+                next if unsolvable?(stage)
                 if stage.solved?()
                     @check_count = check_count
                     moves = extract_moves(nodes, key)
@@ -78,6 +82,46 @@ module Jelly
             end
             updated.merge_jellies()
             return updated
+        end
+
+        def unsolvable?(stage)
+            return false if @constraints.nil?
+
+            color_heights = Hash.new(0)
+            stage.jellies.each do |jelly|
+                next if jelly.color == BLACK || jelly.locked || !@constraints.has_key?(jelly.color)
+                color_heights[jelly.color] += jelly.shape.h
+            end
+
+            stage.jellies.each do |jelly|
+                next if jelly.color == BLACK || jelly.locked || !@constraints.has_key?(jelly.color)
+                return true if jelly.y > @constraints[jelly.color] + color_heights[jelly.color]
+            end
+            return false
+        end
+
+        def detect_constraint(stage)
+            constraints = {}
+
+            height = stage.height
+            width = stage.width
+            maxy = height - 1
+            while true
+                break unless stage.wall_lines[maxy] == (1 << width) - 1
+                maxy -= 1
+            end
+
+            stage.jellies.sort do |a, b|
+                a.y != b.y ? a.y <=> b.y : a.x <=> b.x
+            end.each do |jelly|
+                break if jelly.y >= maxy - 1
+                next if jelly.color == BLACK || !jelly.locked
+                if !constraints.has_key?(jelly.color) || constraints[jelly.color] > jelly.y + jelly.shape.h
+                    constraints[jelly.color] = jelly.y + jelly.shape.h - 1
+                end
+            end
+
+            @constraints = constraints.size > 0 ? constraints : nil
         end
     end
 end

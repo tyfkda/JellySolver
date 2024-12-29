@@ -51,9 +51,11 @@ if __FILE__ == $0
     require 'optparse'
 
     options = {
+        no_prune: false,
         quiet: false,
     }
     opt = OptionParser.new
+    opt.on('--no-prune') {|_| options[:no_prune] = true}
     opt.on('--quiet') {|_| options[:quiet] = true}
     opt.parse!(ARGV)
 

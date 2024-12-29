@@ -9,6 +9,14 @@ module Jelly
             @jellies = jellies
         end
 
+        def height()
+            return @wall_lines.length
+        end
+
+        def width()
+            return @wall_lines.first.to_s(2).length
+        end
+
         def solved?()
             h = Set.new()
             @jellies.each do |jelly|
