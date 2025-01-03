@@ -29,11 +29,13 @@ module Jelly
         end
 
         attr_accessor :wall_lines, :jellies
+        attr_accessor :hiddens
         attr_accessor :distance
 
-        def initialize(wall_lines, jellies)
+        def initialize(wall_lines, jellies, hiddens: nil)
             @wall_lines = wall_lines
             @jellies = jellies
+            @hiddens = hiddens  # [{x, y, color, dx, dy}]
         end
 
         def height()
@@ -45,6 +47,8 @@ module Jelly
         end
 
         def solved?()
+            return false unless @hiddens.nil?
+
             h = Set.new()
             @jellies.each do |jelly|
                 next if jelly.color == BLACK
@@ -59,6 +63,7 @@ module Jelly
             super()
             @jellies.each(&:freeze)
             @jellies.freeze()
+            @hiddens&.freeze()
             return self
         end
 
@@ -85,7 +90,8 @@ module Jelly
                     break if src.nil? || src == jelly
                 end
             end
-            return Stage.new(@wall_lines, jellies)
+            hiddens = @hiddens&.dup()
+            return Stage.new(@wall_lines, jellies, hiddens: hiddens)
         end
 
         # 動かせるなら、動かした結果のStageを返す
@@ -101,7 +107,7 @@ module Jelly
         def move_jellies(moves, dx, dy)
             if frozen?
                 jellies = @jellies.dup()  # jelliesの中身はfrozenのままとしておく
-                updated = Stage.new(@wall_lines, jellies)
+                updated = Stage.new(@wall_lines, jellies, hiddens: @hiddens)
                 return updated.move_jellies(moves, dx, dy)
             end
 
@@ -315,6 +321,44 @@ module Jelly
             end
         end
 
+        def apply_hiddens()
+            return nil if @hiddens.nil?
+
+            applied = nil
+            i = -1
+            while (i += 1) < @hiddens.length
+                hidden = @hiddens[i]
+                x, y, color, dx, dy = hidden.values_at(:x, :y, :color, :dx, :dy)
+                @jellies.each_with_index do |jelly, j|
+                    next unless jelly.color == color && jelly.occupy_position?(x + dx, y + dy)
+                    if apply_hidden(j, hidden)
+                        @hiddens = @hiddens.dup() if @hiddens.frozen?
+                        @hiddens.delete_at(i)
+                        i -= 1
+                        applied = self
+                    end
+                end
+            end
+            @hiddens = nil if @hiddens.empty?
+            return applied
+        end
+
+        def apply_hidden(j, hidden)
+            jelly = @jellies[j]
+
+            x, y, color, dx, dy = hidden.values_at(:x, :y, :color, :dx, :dy)
+            updated = can_move?(jelly, dx, dy)
+            if updated.nil?
+                return false
+            end
+
+            raise "Unexpected" unless updated == self
+            # raise "Unexpected" unless @jellies[j] == jelly
+            appeared = Jelly.new(x + dx, y + dy, color, JellyShape.register_shape([[0, 0]]), false)
+            @jellies[j].merge(appeared)
+            return true
+        end
+
         # クリア状態までの距離を推定
         def estimate_distance()
             color_jellies = Hash.new {|h, k| h[k] = []}
@@ -353,8 +397,12 @@ module Jelly
         end
 
         def node_key()
-            # return @jellies.sort()
-            return @jellies.sort().hash  # 衝突しないことを祈る
+            hiddens = @hiddens&.map do |hidden|
+                x, y, color, dx, dy, jelly = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly)
+                [x, y, color, dx, dy].hash ^ (jelly&.hash || 0)
+            end
+            # return [@jellies.sort(), hiddens.hash]
+            return @jellies.sort().hash ^ hiddens.hash  # 衝突しないことを祈る
         end
     end
 end

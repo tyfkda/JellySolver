@@ -56,13 +56,14 @@ module Jelly
                 end
             end
 
-            stage = Stage.new(wall_lines, jellies)
+            stage = Stage.new(wall_lines, jellies, hiddens: extra[:hiddens])
             stage.merge_jellies()
             return stage
         end
 
         def parse_extra(f, width, height, wall_lines, jellies)
             links = []
+            hiddens = []
             while line = f.gets
                 case line.chomp
                 when %r!^//!
@@ -93,12 +94,24 @@ module Jelly
                             next
                         end
                     end
+                when /^hidden\s+(\d+),(\d+),(#{RE_JELLY_CHARS}),([<>^v])$/
+                    x = $1.to_i
+                    y = $2.to_i
+                    color = $3
+                    dir = $4
+                    d = DIRS[dir]
+                    hiddens << {x: x, y: y, color: color, dx: d[0], dy: d[1]}
+                    next
                 end
                 raise "Invalid format: #{line}"
             end
 
+            links = nil if links.empty?
+            hiddens = nil if hiddens.empty?
+
             return {
                 links: links,
+                hiddens: hiddens,
             }
         end
 

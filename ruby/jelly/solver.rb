@@ -92,11 +92,16 @@ module Jelly
             updated = stage.can_move?(jelly, dx, 0)
             return nil if updated.nil?
 
-            fall_info = nil
-            while (fall_info = updated.free_fall(fall_info))
-                ;
+            while true
+                fall_info = nil
+                while (fall_info = updated.free_fall(fall_info))
+                    ;
+                end
+                updated.merge_jellies()
+                unless updated.apply_hiddens()
+                    break
+                end
             end
-            updated.merge_jellies()
             return updated
         end
 
@@ -127,13 +132,20 @@ module Jelly
                 maxy -= 1
             end
 
+            up = 0
+            unless stage.hiddens.nil?
+                stage.hiddens.each do |hidden|
+                    up += 1 if hidden[:dy] < 0
+                end
+            end
+
             stage.jellies.sort do |a, b|
                 a.y != b.y ? a.y <=> b.y : a.x <=> b.x
             end.each do |jelly|
                 break if jelly.y >= maxy - 1
                 next if jelly.color == BLACK || !jelly.locked
                 if !constraints.has_key?(jelly.color) || constraints[jelly.color] > jelly.y + jelly.shape.h
-                    constraints[jelly.color] = jelly.y + jelly.shape.h - 1
+                    constraints[jelly.color] = jelly.y + jelly.shape.h - 1 + up
                 end
             end
 
