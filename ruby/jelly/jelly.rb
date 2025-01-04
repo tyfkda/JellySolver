@@ -80,6 +80,7 @@ module Jelly
         attr_accessor :locked
         attr_accessor :black_char
         attr_accessor :link_prev, :link_next
+        attr_accessor :hiddens
 
         def initialize(x, y, color, shape, locked = false)
             @x = x
@@ -88,6 +89,7 @@ module Jelly
             @shape = shape
             @locked = locked
             @link_prev = @link_next = nil
+            @hiddens = nil
         end
 
         def occupy_position?(x, y)
@@ -150,17 +152,41 @@ module Jelly
             return false
         end
 
+        def add_hidden(hidden)
+            @hiddens ||= []
+            hidden.freeze()
+            @hiddens << hidden
+        end
+
+        def remove_hidden(x, y)
+            i = @hiddens.find_index {|hidden| hidden[:x] == x && hidden[:y] == y}
+            unless i.nil?
+                @hiddens.delete_at(i)
+                @hiddens = nil if @hiddens.empty?
+            end
+        end
+
+        def freeze()
+            @hiddens.freeze() unless @hiddens.nil?
+            super()
+        end
+
         # frozen解除：複製したJellyを返す
         # リンクがある場合、それらも複製する
         def unfrozen()
             return self unless frozen?
 
-            return self.dup() if @link_next.nil?
+            if @link_next.nil?
+                cloned = self.dup()
+                cloned.hiddens = @hiddens.dup() unless @hiddens.nil?
+                return cloned
+            end
 
             jelly = self
             result = nil
             while true
                 cloned = jelly.dup()
+                cloned.hiddens = jelly.hiddens.dup() unless jelly.hiddens.nil?
                 cloned.link_next = cloned.link_prev = nil
                 result.link(cloned) unless result.nil?
                 result = cloned
@@ -172,16 +198,16 @@ module Jelly
         end
 
         def inspect
-            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@black_char || @color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}#{@link_next ? ' link' : ''}}>"
+            return "#<Jelly: x=#{@x}, y=#{@y}, color=#{@black_char || @color}, shape=#{@shape.inspect}#{@locked ? ' locked' : ''}#{@link_next ? ' link' : ''}#{@hiddens ? " hiddens=#{@hiddens.length}" : ''}}>"
         end
 
         def hash()
-            return [@x, @y, @color, @shape.object_id].hash  # shapeが同じ形のものは同じオブジェクトなので、object_idで代用
+            return [@x, @y, @color, @shape.object_id, @hiddens].hash  # shapeが同じ形のものは同じオブジェクトなので、object_idで代用
         end
 
         def eql?(other)
             return @x == other.x && @y == other.y && @color == other.color &&
-                   @shape == other.shape
+                   @shape == other.shape && @hiddens.hash == other.hiddens.hash
         end
 
         def <=>(other)

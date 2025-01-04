@@ -35,7 +35,13 @@ module Jelly
         def initialize(wall_lines, jellies, hiddens: nil)
             @wall_lines = wall_lines
             @jellies = jellies
-            @hiddens = hiddens  # [{x, y, color, dx, dy}]
+            @hiddens = hiddens  # [{x, y, color, dx, dy, jelly}]
+            hiddens.each(&:freeze) unless hiddens.nil?
+        end
+
+        def freeze()
+            @hiddens.freeze() unless @hiddens.nil?
+            super()
         end
 
         def height()
@@ -90,7 +96,16 @@ module Jelly
                     break if src.nil? || src == jelly
                 end
             end
-            hiddens = @hiddens&.dup()
+            hiddens = @hiddens&.map do |hidden|
+                unless hidden[:jelly].nil?
+                    hidden = hidden.dup()
+                    i = @jellies.find_index {|jelly| jelly == hidden[:jelly]}
+                    raise "jelly not found" if i.nil?
+                    raise "different" unless jellies[i].eql?(@jellies[i])
+                    hidden[:jelly] = jellies[i]
+                end
+                hidden
+            end
             return Stage.new(@wall_lines, jellies, hiddens: hiddens)
         end
 
@@ -119,7 +134,9 @@ module Jelly
                     end
                 end
                 if jelly.frozen?
+                    original = jelly
                     jelly = Stage.unfrozen_jelly(@jellies, jelly)
+                    update_hiddens_for_jelly(original, jelly)
                 end
                 jelly.x += dx
                 jelly.y += dy
@@ -132,6 +149,26 @@ module Jelly
                 end
             end
             return self
+        end
+
+        def update_hiddens_for_jelly(src, dst)
+            return if @hiddens.nil?
+
+            top = src
+            loop do
+                unless src.hiddens.nil?
+                    @hiddens = @hiddens.dup() if @hiddens.frozen?
+                    i = @hiddens.find_index {|hidden| hidden[:jelly] == src}
+                    unless i.nil?
+                        hidden = @hiddens[i].dup()
+                        hidden[:jelly] = dst
+                        @hiddens[i] = hidden
+                    end
+                end
+                src = src.link_next
+                dst = dst.link_next
+                break if src.nil? || src == top
+            end
         end
 
         # 対象のゼリーが動かせるなら、動かした結果のゼリーの集合を返す
@@ -231,6 +268,9 @@ module Jelly
                         dst = dst.link_next
                         break if src.nil? || src == jelly
                     end
+
+                    update_hiddens_for_jelly(jelly, unfrozen)
+
                     jelly = unfrozen
                 end
                 jelly.y += 1
@@ -328,7 +368,11 @@ module Jelly
             i = -1
             while (i += 1) < @hiddens.length
                 hidden = @hiddens[i]
-                x, y, color, dx, dy = hidden.values_at(:x, :y, :color, :dx, :dy)
+                x, y, color, dx, dy, owner = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly)
+                unless owner.nil?
+                    x += owner.x
+                    y += owner.y
+                end
                 @jellies.each_with_index do |jelly, j|
                     next unless jelly.color == color && jelly.occupy_position?(x + dx, y + dy)
                     if apply_hidden(j, hidden)
@@ -346,7 +390,11 @@ module Jelly
         def apply_hidden(j, hidden)
             jelly = @jellies[j]
 
-            x, y, color, dx, dy = hidden.values_at(:x, :y, :color, :dx, :dy)
+            x, y, color, dx, dy, owner = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly)
+            unless owner.nil?
+                x += owner.x
+                y += owner.y
+            end
             updated = can_move?(jelly, dx, dy)
             if updated.nil?
                 return false
@@ -356,6 +404,15 @@ module Jelly
             # raise "Unexpected" unless @jellies[j] == jelly
             appeared = Jelly.new(x + dx, y + dy, color, JellyShape.register_shape([[0, 0]]), false)
             @jellies[j].merge(appeared)
+
+            unless owner.nil?
+                # ownerがfreezeされていたら解凍する必要がある
+                if owner.frozen?
+                    raise 'Frozen' if frozen?
+                    owner = Stage.unfrozen_jelly(@jellies, owner)
+                end
+                owner.remove_hidden(x - owner.x, y - owner.y)
+            end
             return true
         end
 

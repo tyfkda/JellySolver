@@ -100,7 +100,15 @@ module Jelly
                     color = $3
                     dir = $4
                     d = DIRS[dir]
-                    hiddens << {x: x, y: y, color: color, dx: d[0], dy: d[1]}
+                    hidden = {x: x, y: y, color: color, dx: d[0], dy: d[1], jelly: nil}
+                    jelly = jellies.find {|jelly| jelly.occupy_position?(x, y)}
+                    unless jelly.nil?
+                        hidden[:x] -= jelly.x
+                        hidden[:y] -= jelly.y
+                        hidden[:jelly] = jelly
+                        jelly.add_hidden(hidden)
+                    end
+                    hiddens << hidden
                     next
                 end
                 raise "Invalid format: #{line}"
