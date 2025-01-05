@@ -23,15 +23,22 @@ def disp_solution(stage, moves)
     end
 end
 
-def main(fn, options = {})
+def main(fn, profiling, options = {})
     stage = File.open(fn) do |f|
         stage_parser = Jelly::StageParser.new()
         stage_parser.parse(f)
     end
 
     solver = Jelly::Solver.new(**options)
+    moves = nil
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    moves = solver.solve(stage.dup())
+    if profiling
+        StackProf.run(out: '/tmp/stackprof.dump') do
+            moves = solver.solve(stage.dup())
+        end
+    else
+        moves = solver.solve(stage.dup())
+    end
     end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     unless moves.nil?
@@ -55,15 +62,20 @@ if __FILE__ == $0
         use_bfs: false,
         quiet: false,
     }
+    profiling = false
     opt = OptionParser.new
     opt.on('--no-prune') {|_| options[:no_prune] = true}
     opt.on('--bfs') {|_| options[:use_bfs] = true}
     opt.on('--quiet') {|_| options[:quiet] = true}
+    opt.on('--prof') do |_|
+        profiling = true
+        require 'stackprof'  # プロファイラを使う場合にのみrequire
+    end
     opt.parse!(ARGV)
 
     if ARGV.length != 1
         $stderr.puts "Usage: #{$0} <stage_file>"
         exit(1)
     end
-    main(ARGV[0], options)
+    main(ARGV[0], profiling, options)
 end

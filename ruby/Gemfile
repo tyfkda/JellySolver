@@ -6,3 +6,4 @@ ruby '~> 3.3'  # < 4.0 （4だとruby_wasmやjsが動かない）
 
 gem 'js', '2.7.0'
 gem 'ruby_wasm', '2.7.0'
+gem 'stackprof', '~> 0.2.26'
