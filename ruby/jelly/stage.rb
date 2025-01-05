@@ -390,7 +390,7 @@ module Jelly
         def apply_hidden(j, hidden)
             jelly = @jellies[j]
 
-            x, y, color, dx, dy, owner = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly)
+            x, y, color, dx, dy, owner, link = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly, :link)
             unless owner.nil?
                 x += owner.x
                 y += owner.y
@@ -402,7 +402,8 @@ module Jelly
 
             raise "Unexpected" unless updated == self
             # raise "Unexpected" unless @jellies[j] == jelly
-            appeared = Jelly.new(x + dx, y + dy, color, JellyShape.register_shape([[0, 0]]), false)
+            locked = link && owner.nil?
+            appeared = Jelly.new(x + dx, y + dy, color, JellyShape.register_shape([[0, 0]]), locked)
             @jellies[j].merge(appeared)
 
             unless owner.nil?
@@ -412,6 +413,9 @@ module Jelly
                     owner = Stage.unfrozen_jelly(@jellies, owner)
                 end
                 owner.remove_hidden(x - owner.x, y - owner.y)
+                if link
+                    owner.link(@jellies[j])
+                end
             end
             return true
         end

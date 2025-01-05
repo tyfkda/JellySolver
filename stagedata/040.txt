@@ -1,0 +1,21 @@
+r....#######
+##........##
+###.......##
+###.......##
+###.......##
+###.......##
+RRR.......##
+#R........B#
+
+hidden 5,9,B,^
+hidden 6,9,B,^
+hidden 7,9,B,^
+hidden 8,9,B,^
+hidden 9,9,B,^
+hidden 10,9,B,^
+hidden 11,2,B,<
+hidden 11,3,B,<
+hidden 11,4,B,<
+hidden 11,5,B,<
+hidden 11,6,B,<
+hidden 11,7,B,<

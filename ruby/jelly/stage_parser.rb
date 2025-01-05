@@ -94,13 +94,14 @@ module Jelly
                             next
                         end
                     end
-                when /^hidden\s+(\d+),(\d+),(#{RE_JELLY_CHARS}),([<>^v])$/
-                    x = $1.to_i
-                    y = $2.to_i
-                    color = $3
-                    dir = $4
+                when /^hidden(\+link)?\s+(\d+),(\d+),(#{RE_JELLY_CHARS}),([<>^v])$/
+                    link = $1 == '+link'
+                    x = $2.to_i
+                    y = $3.to_i
+                    color = $4
+                    dir = $5
                     d = DIRS[dir]
-                    hidden = {x: x, y: y, color: color, dx: d[0], dy: d[1], jelly: nil}
+                    hidden = {x: x, y: y, color: color, dx: d[0], dy: d[1], jelly: nil, link: link}
                     jelly = jellies.find {|jelly| jelly.occupy_position?(x, y)}
                     unless jelly.nil?
                         hidden[:x] -= jelly.x
