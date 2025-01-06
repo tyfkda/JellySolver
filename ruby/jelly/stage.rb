@@ -389,6 +389,8 @@ module Jelly
 
         def apply_hidden(j, hidden)
             jelly = @jellies[j]
+            ox = jelly.x
+            oy = jelly.y
 
             x, y, color, dx, dy, owner, link = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly, :link)
             unless owner.nil?
@@ -396,8 +398,32 @@ module Jelly
                 y += owner.y
             end
             updated = can_move?(jelly, dx, dy)
+            owner_moved = false
             if updated.nil?
-                return false
+                # ownerがいたら、そいつを逆向きに動かせるか試す
+                return false if owner.nil?
+                updated = can_move?(owner, -dx, -dy)
+                return false if updated.nil?
+                raise "Unexpected" unless updated == self
+                if owner.frozen?
+                    # ownerが複製されているはずなので、取得し直す
+                    owner = @jellies.find {|other| other.x == owner.x - dx && other.y == owner.y - dy && other.color == owner.color && other.shape == owner.shape}
+                    raise "owner not found" if owner.nil?
+                end
+                x -= dx
+                y -= dy
+                owner_moved = true
+
+                if jelly.frozen?
+                    jelly = Stage.unfrozen_jelly(@jellies, jelly)
+                end
+            else
+                k = @jellies.find_index {|other| other.x == ox + dx && other.y == oy + dy && other.color == jelly.color && other.shape == jelly.shape}
+                if k != j
+                    puts "In apply_hidden, index different:#{j}/#{k}"
+                    j = k
+                    jelly = @jellies[j]
+                end
             end
 
             raise "Unexpected" unless updated == self
@@ -406,7 +432,7 @@ module Jelly
             appeared = Jelly.new(x + dx, y + dy, color, JellyShape.register_shape([[0, 0]]), locked)
             @jellies[j].merge(appeared)
 
-            unless owner.nil?
+            unless owner.nil? || owner_moved
                 # ownerがfreezeされていたら解凍する必要がある
                 if owner.frozen?
                     raise 'Frozen' if frozen?
