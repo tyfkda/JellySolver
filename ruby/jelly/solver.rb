@@ -144,8 +144,18 @@ module Jelly
             end.each do |jelly|
                 break if jelly.y >= maxy - 1
                 next if jelly.color == BLACK || !jelly.locked
-                if !constraints.has_key?(jelly.color) || constraints[jelly.color] > jelly.y + jelly.shape.h
-                    constraints[jelly.color] = jelly.y + jelly.shape.h - 1 + up
+                y = jelly.y + jelly.shape.h - 1 + up
+                if !constraints.has_key?(jelly.color) || constraints[jelly.color] > y
+                    constraints[jelly.color] = y
+                end
+            end
+
+            stage.hiddens&.each do |hidden|
+                next unless hidden[:jelly].nil?
+                y, color, dy = hidden.values_at(:y, :color, :dy)
+                y += dy + up
+                if !constraints.has_key?(color) || constraints[color] > y
+                    constraints[color] = y + 1  # 本当は、残りのゼリーの高さを考慮する必要がある
                 end
             end
 
