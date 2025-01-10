@@ -424,7 +424,7 @@ module Jelly
                 color_jellies[jelly.color] << jelly
             end
 
-            return color_jellies.values.inject(0) do |acc, array|
+            distance = color_jellies.values.inject(0) do |acc, array|
                 if array.length < 2
                     acc
                 else
@@ -433,6 +433,31 @@ module Jelly
                     acc + [jr.x - (jl.x + jl.shape.w), 1].max
                 end
             end
+
+            # 隠れゼリーを考慮
+            unless @hiddens.nil?
+                d = @hiddens.inject(0) do |acc, hidden|
+                    x, y, color, dx, dy, owner = hidden.values_at(:x, :y, :color, :dx, :dy, :jelly)
+                    unless owner.nil?
+                        x += owner.x
+                        y += owner.y
+                    end
+                    # 中間にある場合には道中で回収されるものとして、端にある場合だけ考慮
+
+                    jellies = color_jellies[color]
+                    jl = jellies.min_by {|jelly| jelly.x}
+                    jr = jellies.max_by {|jelly| jelly.x + jelly.shape.w}
+                    if x < jl.x
+                        acc + (jl.x - x)
+                    elsif x >= jr.x + jr.shape.w
+                        acc + (x - (jr.x + jr.shape.w))
+                    else
+                        acc + 1
+                    end
+                end
+                distance += d
+            end
+            return distance
         end
 
         def make_lines()
