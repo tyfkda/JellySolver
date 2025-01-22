@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ゼリーのパズルソルバー</title>
+    <!-- <link rel="stylesheet" href="default.css"> -->
+  </head>
+
+  <body>
+    <div x-data="initialData">
+      <h3>ゼリーのパズルソルバー</h3>
+
+      <noscript>
+        <div style="font-weight:bold">JavaScriptを有効にしてください</div>
+      </noscript>
+
+      <div x-show="error" x-text="error" style="color:red; font-weight:bold"></div>
+
+      <div x-show="!error" style="display:none">
+        <div>
+            <canvas id="canvas" width="784" height="560" style="border:1px solid black"></canvas>
+        </div>
+        <div>
+          <button @click="prevStage()" x-bind:disabled="stageNo<=1">前ステージ</button>
+          <span x-text="stageNo"></span>
+          <button @click="nextStage()" x-bind:disabled="stageNo>=maxStageNo">次ステージ</button>
+        </div>
+        <div>
+          <button @click="solve()" x-bind:disabled="solving">解く</button>
+          <span x-text="elapsedTime" x-show="elapsedTime"></span>
+        </div>
+        <template x-if="solution!=null">
+          <div>
+            <button @click="prevStep()" x-bind:disabled="step<=0">前ステップ</button>
+            <span x-text="step+1"></span>/<span x-text="solution.length"></span>
+            <button @click="nextStep()" x-bind:disabled="step+1>=solution.length">次ステップ</button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <script src="main.js" type="module"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.14.8/cdn.min.js" integrity="sha512-S0FmGVNvhIGBTFW8xl2Sb9VjaTqStfWO1KHQjaxvTESAOe0RlL7jITJQVmA5V1bu88Y9VgDoW7jqsQCYVRLx1Q==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  </body>
+</html>

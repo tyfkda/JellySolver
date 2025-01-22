@@ -1,4 +1,5 @@
 require_relative 'const'
+require_relative 'jelly'
 
 module Jelly
     class Stage
