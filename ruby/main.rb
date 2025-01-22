@@ -31,13 +31,13 @@ def main(fn, options = {})
 
     solver = Jelly::Solver.new(**options)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    moves = solver.solve(stage)
+    moves = solver.solve(stage.dup())
     end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     unless moves.nil?
         unless options[:quiet]
             $stderr.puts "\rSolved!\x1b[0K"
-            disp_solution(stage.dup(), moves)
+            disp_solution(stage, moves)
         end
         puts "Steps=#{moves.length}, check=#{solver.check_count}, elapsed=#{sprintf("%.3f", end_time - start_time)}s"
         return true

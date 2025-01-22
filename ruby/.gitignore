@@ -1,3 +1,7 @@
 /.bundle/
 /vendor/
 /Gemfile.lock
+
+/build/
+/rubies/
+*.wasm
