@@ -106,3 +106,4 @@ Steps=7, check=43, elapsed=0.009s
 
   * 解説ブログ記事：[「ゼリーのパズル」ソルバーを作る（A＊）](https://tyfkda.github.io/blog/2025/01/13/jelly-solver.html)
   * [Rubyで優先度付きキューを実装した](https://gengogo5.com/posts/33) ACした優先度付きキュー`PriorityQueue`を使わせていただきました
+  * [ステージ紹介](https://github.com/tyfkda/JellySolver/blob/main/doc/%E3%82%B9%E3%83%86%E3%83%BC%E3%82%B8%E7%B4%B9%E4%BB%8B.md) ステージのスクショと解法ヒント
