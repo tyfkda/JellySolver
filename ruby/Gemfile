@@ -2,9 +2,9 @@
 
 source "https://rubygems.org"
 
-ruby '~> 3.3'  # < 4.0 （4だとruby_wasmやjsが動かない）
+ruby '~> 4.0'
 
-gem 'js', '2.7.0'
-gem 'ruby_wasm', '2.7.0'
+gem 'js', '2.9.4'
+gem 'ruby_wasm', '2.9.4'
 gem 'stackprof', '~> 0.2.26'
 gem 'rmagick', '~> 6.0', '>= 6.0.1'
