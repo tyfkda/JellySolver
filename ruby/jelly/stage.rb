@@ -127,11 +127,14 @@ module Jelly
                 return updated.move_jellies(moves, dx, dy)
             end
 
-            moves.each do |jelly|
+            visited = Set.new
+            moves.to_a.each do |jelly|
+                next if visited.include?(jelly.object_id)
+                visited.add(jelly.object_id)
                 unless jelly.link_next.nil?
                     other = jelly
                     while (other = other.link_next) != jelly
-                        moves.delete(other)
+                        visited.add(other.object_id)
                     end
                 end
                 if jelly.frozen?
