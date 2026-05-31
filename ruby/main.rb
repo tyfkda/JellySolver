@@ -68,6 +68,7 @@ if __FILE__ == $0
             no_prune: false,
             use_bfs: false,
             quiet: false,
+            parallel: false,
         },
         interactive: false,
         profiling: false,
@@ -76,6 +77,7 @@ if __FILE__ == $0
     opt.on('--no-prune') {|_| options[:solver][:no_prune] = true}
     opt.on('--bfs') {|_| options[:solver][:use_bfs] = true}
     opt.on('--quiet') {|_| options[:solver][:quiet] = true}
+    opt.on('--parallel') {|_| options[:solver][:parallel] = true}
     opt.on('--interactive') {|_| options[:interactive] = true}
     opt.on('--prof') do |_|
         options[:profiling] = true

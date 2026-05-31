@@ -1,16 +1,121 @@
 require_relative 'pqueue'
+require 'thread'
+require 'etc'
 
 module Jelly
     class Solver
         attr_reader :check_count
 
-        def initialize(no_prune: false, use_bfs: false, quiet: false)
+        class SearchNode
+            attr_reader :stage, :key, :step, :f_score
+            def initialize(stage, key, step, use_bfs)
+                @stage = stage
+                @key = key
+                @step = step
+                @f_score = use_bfs ? 0 : (stage.distance || 0) + step
+            end
+        end
+
+        class ThreadSafeQueue
+            def initialize
+                @q = []
+                @mutex = Mutex.new
+                @cond = ConditionVariable.new
+            end
+
+            def push(val)
+                @mutex.synchronize do
+                    @q << val
+                    @cond.signal
+                end
+            end
+            alias << push
+
+            def pop(timeout = nil)
+                @mutex.synchronize do
+                    if timeout
+                        limit = Time.now + timeout
+                        while @q.empty?
+                            remaining = limit - Time.now
+                            break if remaining <= 0
+                            @cond.wait(@mutex, remaining)
+                        end
+                    else
+                        while @q.empty?
+                            @cond.wait(@mutex)
+                        end
+                    end
+                    @q.empty? ? nil : @q.shift
+                end
+            end
+
+            def size
+                @mutex.synchronize { @q.size }
+            end
+
+            def empty?
+                @mutex.synchronize { @q.empty? }
+            end
+        end
+
+        class ThreadSafePriorityQueue
+            def initialize(&block)
+                @pq = PriorityQueue.new(&block)
+                @mutex = Mutex.new
+                @cond = ConditionVariable.new
+            end
+
+            def push(val)
+                @mutex.synchronize do
+                    @pq << val
+                    @cond.signal
+                end
+            end
+            alias << push
+
+            def pop(timeout = nil)
+                @mutex.synchronize do
+                    if timeout
+                        limit = Time.now + timeout
+                        while @pq.empty?
+                            remaining = limit - Time.now
+                            break if remaining <= 0
+                            @cond.wait(@mutex, remaining)
+                        end
+                    else
+                        while @pq.empty?
+                            @cond.wait(@mutex)
+                        end
+                    end
+                    @pq.empty? ? nil : @pq.shift
+                end
+            end
+
+            def size
+                @mutex.synchronize { @pq.size }
+            end
+
+            def empty?
+                @mutex.synchronize { @pq.empty? }
+            end
+        end
+
+        def initialize(no_prune: false, use_bfs: false, quiet: false, parallel: false)
             @no_prune = no_prune
             @use_bfs = use_bfs
             @quiet = quiet
+            @parallel = parallel
         end
 
         def solve(stage, &block)
+            if @parallel
+                solve_parallel(stage, &block)
+            else
+                solve_sequential(stage, &block)
+            end
+        end
+
+        def solve_sequential(stage, &block)
             detect_constraint(stage) unless @no_prune
 
             stage.distance = stage.estimate_distance() unless @use_bfs
@@ -53,6 +158,121 @@ module Jelly
                 end
             end
             @check_count = check_count
+            return nil
+        end
+
+        def solve_parallel(stage, &block)
+            detect_constraint(stage) unless @no_prune
+
+            stage.distance = stage.estimate_distance() unless @use_bfs
+            stage.freeze()
+            key = stage.node_key()
+
+            if @use_bfs
+                que = ThreadSafeQueue.new
+            else
+                que = ThreadSafePriorityQueue.new {|x, y| x.f_score <=> y.f_score}
+            end
+
+            que << SearchNode.new(stage, key, 0, @use_bfs)
+
+            nodes = {}
+            nodes_mutex = Mutex.new
+            nodes[key] = [nil, nil]
+
+            check_count = 0
+            check_mutex = Mutex.new
+
+            active_workers = 0
+            workers_mutex = Mutex.new
+
+            goal_stage = nil
+            goal_key = nil
+            goal_mutex = Mutex.new
+
+            num_threads = Etc.respond_to?(:nprocessors) ? Etc.nprocessors : 4
+            threads = []
+
+            num_threads.times do
+                threads << Thread.new do
+                    while true
+                        break if goal_mutex.synchronize { goal_stage }
+
+                        node = que.pop(0.01)
+
+                        if node.nil?
+                            is_done = false
+                            workers_mutex.synchronize do
+                                if active_workers == 0 && que.empty?
+                                    is_done = true
+                                end
+                            end
+                            break if is_done
+                            next
+                        end
+
+                        workers_mutex.synchronize { active_workers += 1 }
+                        begin
+                            current_stage = node.stage
+                            current_key = node.key
+                            step = node.step
+
+                            current_check = nil
+                            check_mutex.synchronize do
+                                check_count += 1
+                                current_check = check_count
+                            end
+
+                            if !@quiet && current_check % 1000 == 0
+                                $stderr.print "\rCheck=#{current_check}, left=#{que.size}\x1b[0K"
+                            end
+
+                            next if !@no_prune && unsolvable?(current_stage)
+
+                            if current_stage.solved?
+                                goal_mutex.synchronize do
+                                    goal_stage = current_stage
+                                    goal_key = current_key
+                                end
+                                break
+                            end
+
+                            enumerate_next(current_stage) do |next_stage, move|
+                                next_key = next_stage.node_key()
+                                added = false
+                                nodes_mutex.synchronize do
+                                    unless nodes.has_key?(next_key)
+                                        nodes[next_key] = [current_key, move]
+                                        added = true
+                                    end
+                                end
+
+                                if added
+                                    next_stage.distance = next_stage.estimate_distance() unless @use_bfs
+                                    next_stage.freeze()
+                                    que.push(SearchNode.new(next_stage, next_key, step + 1, @use_bfs))
+                                end
+                            end
+                        ensure
+                            workers_mutex.synchronize { active_workers -= 1 }
+                        end
+                    end
+                end
+            end
+
+            threads.each(&:join)
+
+            @check_count = check_mutex.synchronize { check_count }
+            final_goal = goal_mutex.synchronize { goal_stage }
+            final_key = goal_mutex.synchronize { goal_key }
+
+            if final_goal
+                moves = extract_moves(nodes, final_key)
+                if block.nil? || block.call(moves)
+                    return moves
+                end
+            end
+
             return nil
         end
 
