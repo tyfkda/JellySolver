@@ -58,6 +58,8 @@ public class Stage {
     public List<Hidden> hiddens;
     public int distance;
     private boolean frozen;
+    private List<Jelly> sortedJelliesCache;
+    private List<Hidden> sortedHiddensCache;
 
     public Stage(int[] wallLines, List<Jelly> jellies, List<Hidden> hiddens) {
         this.wallLines = wallLines;
@@ -65,6 +67,8 @@ public class Stage {
         this.hiddens = hiddens;
         this.distance = 0;
         this.frozen = false;
+        this.sortedJelliesCache = null;
+        this.sortedHiddensCache = null;
     }
 
     public boolean isFrozen() {
@@ -76,6 +80,24 @@ public class Stage {
         for (Jelly j : jellies) {
             j.freeze();
         }
+
+        this.sortedJelliesCache = new ArrayList<>(this.jellies);
+        Collections.sort(this.sortedJelliesCache);
+
+        if (this.hiddens != null) {
+            this.sortedHiddensCache = new ArrayList<>(this.hiddens);
+            this.sortedHiddensCache.sort((a, b) -> {
+                if (a.x != b.x) return Integer.compare(a.x, b.x);
+                if (a.y != b.y) return Integer.compare(a.y, b.y);
+                if (a.color != b.color) return Character.compare(a.color, b.color);
+                if (a.dx != b.dx) return Integer.compare(a.dx, b.dx);
+                if (a.dy != b.dy) return Integer.compare(a.dy, b.dy);
+                return Boolean.compare(a.link, b.link);
+            });
+        } else {
+            this.sortedHiddensCache = null;
+        }
+
         return this;
     }
 
@@ -353,9 +375,11 @@ public class Stage {
                 }
 
                 updateHiddensForJelly(jelly, unfrozen);
-                jelly = unfrozen;
             }
-            jelly.y += 1;
+        }
+
+        for (int idx = 0; idx < jList.size(); idx++) {
+            jList.get(idx).y += 1;
         }
 
         return new FallInfo(wLines, jList);
@@ -423,7 +447,7 @@ public class Stage {
                     if (nxt == other) {
                         break;
                     }
-                    Jelly cloned = nxt.unfrozen();
+                    Jelly cloned = nxt.shallowCopy();
                     cloned.linkNext = cloned;
                     cloned.linkPrev = cloned;
                     if (prv != null) {
@@ -678,10 +702,15 @@ public class Stage {
 
         if (!Arrays.equals(wallLines, stage.wallLines)) return false;
 
-        List<Jelly> thisSorted = new ArrayList<>(this.jellies);
-        List<Jelly> otherSorted = new ArrayList<>(stage.jellies);
-        Collections.sort(thisSorted);
-        Collections.sort(otherSorted);
+        List<Jelly> thisSorted = this.sortedJelliesCache != null ? this.sortedJelliesCache : this.jellies;
+        List<Jelly> otherSorted = stage.sortedJelliesCache != null ? stage.sortedJelliesCache : stage.jellies;
+
+        if (this.sortedJelliesCache == null || stage.sortedJelliesCache == null) {
+            thisSorted = new ArrayList<>(thisSorted);
+            Collections.sort(thisSorted);
+            otherSorted = new ArrayList<>(otherSorted);
+            Collections.sort(otherSorted);
+        }
 
         if (!thisSorted.equals(otherSorted)) return false;
 
@@ -689,40 +718,50 @@ public class Stage {
         if (this.hiddens == null || stage.hiddens == null) return false;
         if (this.hiddens.size() != stage.hiddens.size()) return false;
 
-        List<Hidden> thisH = new ArrayList<>(this.hiddens);
-        List<Hidden> otherH = new ArrayList<>(stage.hiddens);
-        Comparator<Hidden> hc = (a, b) -> {
-            if (a.x != b.x) return Integer.compare(a.x, b.x);
-            if (a.y != b.y) return Integer.compare(a.y, b.y);
-            if (a.color != b.color) return Character.compare(a.color, b.color);
-            if (a.dx != b.dx) return Integer.compare(a.dx, b.dx);
-            if (a.dy != b.dy) return Integer.compare(a.dy, b.dy);
-            return Boolean.compare(a.link, b.link);
-        };
-        thisH.sort(hc);
-        otherH.sort(hc);
-
-        return thisH.equals(otherH);
-    }
-
-    @Override
-    public int hashCode() {
-        List<Jelly> sortedJellies = new ArrayList<>(this.jellies);
-        Collections.sort(sortedJellies);
-        int jHash = sortedJellies.hashCode();
-
-        int hHash = 0;
-        if (this.hiddens != null) {
-            List<Hidden> sortedH = new ArrayList<>(this.hiddens);
-            sortedH.sort((a, b) -> {
+        List<Hidden> thisH = this.sortedHiddensCache;
+        List<Hidden> otherH = stage.sortedHiddensCache;
+        if (thisH == null || otherH == null) {
+            thisH = new ArrayList<>(this.hiddens);
+            otherH = new ArrayList<>(stage.hiddens);
+            Comparator<Hidden> hc = (a, b) -> {
                 if (a.x != b.x) return Integer.compare(a.x, b.x);
                 if (a.y != b.y) return Integer.compare(a.y, b.y);
                 if (a.color != b.color) return Character.compare(a.color, b.color);
                 if (a.dx != b.dx) return Integer.compare(a.dx, b.dx);
                 if (a.dy != b.dy) return Integer.compare(a.dy, b.dy);
                 return Boolean.compare(a.link, b.link);
-            });
-            hHash = sortedH.hashCode();
+            };
+            thisH.sort(hc);
+            otherH.sort(hc);
+        }
+
+        return thisH.equals(otherH);
+    }
+
+    @Override
+    public int hashCode() {
+        List<Jelly> thisSorted = this.sortedJelliesCache;
+        if (thisSorted == null) {
+            thisSorted = new ArrayList<>(this.jellies);
+            Collections.sort(thisSorted);
+        }
+        int jHash = thisSorted.hashCode();
+
+        int hHash = 0;
+        if (this.hiddens != null) {
+            List<Hidden> thisH = this.sortedHiddensCache;
+            if (thisH == null) {
+                thisH = new ArrayList<>(this.hiddens);
+                thisH.sort((a, b) -> {
+                    if (a.x != b.x) return Integer.compare(a.x, b.x);
+                    if (a.y != b.y) return Integer.compare(a.y, b.y);
+                    if (a.color != b.color) return Character.compare(a.color, b.color);
+                    if (a.dx != b.dx) return Integer.compare(a.dx, b.dx);
+                    if (a.dy != b.dy) return Integer.compare(a.dy, b.dy);
+                    return Boolean.compare(a.link, b.link);
+                });
+            }
+            hHash = thisH.hashCode();
         }
 
         return Objects.hash(jHash, hHash);

@@ -154,7 +154,7 @@ public class Jelly implements Comparable<Jelly> {
         }
     }
 
-    private Jelly shallowCopy() {
+    public Jelly shallowCopy() {
         Jelly cloned = new Jelly(this.x, this.y, this.color, this.shape, this.locked);
         cloned.blackChar = this.blackChar;
         return cloned;
