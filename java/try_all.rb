@@ -3,6 +3,7 @@
 require 'open3'
 require 'optparse'
 require 'timeout'
+require 'tempfile'
 
 def run(fn, options: {})
     print "#{Time.now.strftime('%H:%M:%S')} #{File.basename(fn)}: "
@@ -14,40 +15,43 @@ def run(fn, options: {})
         fn,
     ].compact
 
+    tmp_out = Tempfile.new('jelly_solver_out')
+    tmp_err = Tempfile.new('jelly_solver_err')
+
     pid = nil
-    out = ""
-    err = ""
     status = nil
     start_time = Time.now
 
     begin
+        pid = Process.spawn(*command, out: tmp_out.path, err: tmp_err.path)
         if options[:timeout]
             Timeout.timeout(options[:timeout]) do
-                Open3.popen3(*command) do |stdin, stdout, stderr, wait_thr|
-                    pid = wait_thr.pid
-                    out = stdout.read
-                    err = stderr.read
-                    status = wait_thr.value
-                end
+                _, status = Process.wait2(pid)
             end
         else
-            Open3.popen3(*command) do |stdin, stdout, stderr, wait_thr|
-                out = stdout.read
-                err = stderr.read
-                status = wait_thr.value
-            end
+            _, status = Process.wait2(pid)
         end
     rescue Timeout::Error
         if pid
             begin
                 Process.kill("KILL", pid)
-                Process.wait(pid)
+                Process.wait2(pid)
             rescue Errno::ESRCH, Errno::ECHILD
             end
         end
         elapsed = Time.now - start_time
         puts "Timeout (killed after #{sprintf("%.3f", elapsed)}s)"
         return
+    ensure
+        tmp_out.rewind
+        out = tmp_out.read
+        tmp_out.close
+        tmp_out.unlink
+
+        tmp_err.rewind
+        err = tmp_err.read
+        tmp_err.close
+        tmp_err.unlink
     end
 
     if status.nil? || status.exitstatus != 0
