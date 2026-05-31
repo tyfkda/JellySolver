@@ -40,6 +40,7 @@ public class Main {
         boolean noPrune = false;
         boolean useBfs = false;
         boolean quiet = false;
+        boolean parallel = false;
         String filename = null;
 
         for (String arg : args) {
@@ -49,6 +50,8 @@ public class Main {
                 useBfs = true;
             } else if (arg.equals("--quiet")) {
                 quiet = true;
+            } else if (arg.equals("--parallel")) {
+                parallel = true;
             } else if (arg.startsWith("-")) {
                 System.err.println("Unknown option: " + arg);
                 System.exit(1);
@@ -58,7 +61,7 @@ public class Main {
         }
 
         if (filename == null) {
-            System.err.println("Usage: java Main [--no-prune] [--bfs] [--quiet] <stage_file>");
+            System.err.println("Usage: java Main [--no-prune] [--bfs] [--quiet] [--parallel] <stage_file>");
             System.exit(1);
         }
 
@@ -72,7 +75,7 @@ public class Main {
             System.exit(1);
         }
 
-        Solver solver = new Solver(noPrune, useBfs, quiet);
+        Solver solver = new Solver(noPrune, useBfs, quiet, parallel);
         long startTime = System.nanoTime();
         List<Move> moves = solver.solve(stage.dup());
         long endTime = System.nanoTime();

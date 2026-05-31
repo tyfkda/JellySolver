@@ -12,6 +12,7 @@ def run(fn, options: {})
         'java', 'Main', '--quiet',
         options[:no_prune] ? '--no-prune' : nil,
         options[:use_bfs] ? '--bfs' : nil,
+        options[:parallel] ? '--parallel' : nil,
         fn,
     ].compact
 
@@ -113,10 +114,12 @@ if __FILE__ == $0
         no_prune: false,
         use_bfs: false,
         timeout: nil,
+        parallel: false,
     }
     opt = OptionParser.new
     opt.on('--no-prune') {|_| options[:no_prune] = true}
     opt.on('--bfs') {|_| options[:use_bfs] = true}
+    opt.on('--parallel') {|_| options[:parallel] = true}
     opt.on('--timeout=seconds') {|s| options[:timeout] = s.to_f}
     opt.on('-d', '--dir=Directory') {|s| dir = s}
     opt.on('-p', '--pattern=regexp') {|s| pattern = Regexp.new(s)}

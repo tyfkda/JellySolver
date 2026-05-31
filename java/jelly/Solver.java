@@ -1,19 +1,23 @@
 package jelly;
 
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
 public class Solver {
     private final boolean noPrune;
     private final boolean useBfs;
     private final boolean quiet;
+    private final boolean parallel;
     private int checkCount;
     private Map<Character, Integer> constraints;
     private int maxy;
 
-    public Solver(boolean noPrune, boolean useBfs, boolean quiet) {
+    public Solver(boolean noPrune, boolean useBfs, boolean quiet, boolean parallel) {
         this.noPrune = noPrune;
         this.useBfs = useBfs;
         this.quiet = quiet;
+        this.parallel = parallel;
         this.checkCount = 0;
     }
 
@@ -43,6 +47,14 @@ public class Solver {
     }
 
     public List<Move> solve(Stage stage) {
+        if (parallel) {
+            return solveParallel(stage);
+        } else {
+            return solveSequential(stage);
+        }
+    }
+
+    private List<Move> solveSequential(Stage stage) {
         if (!noPrune) {
             detectConstraint(stage);
         }
@@ -104,6 +116,138 @@ public class Solver {
         }
 
         this.checkCount = checkCount;
+        return null;
+    }
+
+    private List<Move> solveParallel(Stage stage) {
+        if (!noPrune) {
+            detectConstraint(stage);
+        }
+
+        if (!useBfs) {
+            stage.distance = stage.estimateDistance();
+        }
+        stage.freeze();
+
+        BlockingQueue<SearchNode> que;
+        if (useBfs) {
+            que = new LinkedBlockingQueue<>();
+        } else {
+            que = new PriorityBlockingQueue<>(11, Comparator.comparingInt(a -> a.fScore));
+        }
+
+        ConcurrentMap<Stage, NodeHistory> nodes = new ConcurrentHashMap<>();
+        nodes.put(stage, new NodeHistory(null, null));
+
+        que.add(new SearchNode(stage, 0, useBfs));
+
+        int numThreads = Runtime.getRuntime().availableProcessors();
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+
+        AtomicInteger activeWorkers = new AtomicInteger(0);
+        AtomicInteger globalCheckCount = new AtomicInteger(0);
+        AtomicReference<Stage> goalStage = new AtomicReference<>(null);
+
+        Object lock = new Object();
+
+        class Worker implements Runnable {
+            @Override
+            public void run() {
+                while (goalStage.get() == null) {
+                    SearchNode node = null;
+                    try {
+                        node = que.poll(10, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+
+                    if (node == null) {
+                        if (activeWorkers.get() == 0 && que.isEmpty()) {
+                            synchronized (lock) {
+                                lock.notifyAll();
+                            }
+                            break;
+                        }
+                        continue;
+                    }
+
+                    activeWorkers.incrementAndGet();
+                    try {
+                        Stage currentStage = node.stage;
+                        int step = node.step;
+                        int currentCheck = globalCheckCount.incrementAndGet();
+
+                        if (!quiet && currentCheck % 1000 == 0) {
+                            System.err.print("\rCheck=" + currentCheck + ", left=" + que.size() + "\033[0K");
+                            System.err.flush();
+                        }
+
+                        if (!noPrune && unsolvable(currentStage)) {
+                            continue;
+                        }
+
+                        if (currentStage.solved()) {
+                            goalStage.compareAndSet(null, currentStage);
+                            synchronized (lock) {
+                                lock.notifyAll();
+                            }
+                            break;
+                        }
+
+                        final int nextStep = step + 1;
+                        enumerateNext(currentStage, (nextStage, move) -> {
+                            nextStage.freeze();
+                            if (nodes.putIfAbsent(nextStage, new NodeHistory(currentStage, move)) == null) {
+                                if (!useBfs) {
+                                    nextStage.distance = nextStage.estimateDistance();
+                                }
+                                que.add(new SearchNode(nextStage, nextStep, useBfs));
+                            }
+                        });
+                    } finally {
+                        activeWorkers.decrementAndGet();
+                    }
+                }
+
+                synchronized (lock) {
+                    lock.notifyAll();
+                }
+            }
+        }
+
+        for (int i = 0; i < numThreads; i++) {
+            executor.submit(new Worker());
+        }
+
+        synchronized (lock) {
+            while (goalStage.get() == null && (activeWorkers.get() > 0 || !que.isEmpty())) {
+                try {
+                    lock.wait(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        executor.shutdownNow();
+        try {
+            executor.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        this.checkCount = globalCheckCount.get();
+        Stage finalGoal = goalStage.get();
+        if (finalGoal != null) {
+            if (!quiet) {
+                System.err.print("\rSolved!\033[0K\n");
+                System.err.flush();
+            }
+            return extractMoves(nodes, finalGoal);
+        }
+
         return null;
     }
 
