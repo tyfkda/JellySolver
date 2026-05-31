@@ -195,7 +195,7 @@ public class Stage {
         }
 
         Queue<Jelly> queue = new LinkedList<>(moves);
-        Set<Jelly> visited = new HashSet<>();
+        Set<Jelly> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         while (!queue.isEmpty()) {
             Jelly jelly = queue.poll();
             if (visited.contains(jelly)) {
