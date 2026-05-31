@@ -9,12 +9,14 @@ def run(fn, options: {})
     print "#{Time.now.strftime('%H:%M:%S')} #{File.basename(fn)}: "
 
     command = [
-        'java', 'Main', '--quiet',
+        'java',
+        options[:classpath] ? ['-cp', options[:classpath]] : nil,
+        'Main', '--quiet',
         options[:no_prune] ? '--no-prune' : nil,
         options[:use_bfs] ? '--bfs' : nil,
         options[:parallel] ? '--parallel' : nil,
         fn,
-    ].compact
+    ].flatten.compact
 
     tmp_out = Tempfile.new('jelly_solver_out')
     tmp_err = Tempfile.new('jelly_solver_err')
@@ -77,14 +79,6 @@ def run(fn, options: {})
 end
 
 def main(fns, dir, pattern, exclude, greater, options)
-    # Compile
-    puts "Compiling Java files..."
-    system("javac Main.java jelly/*.java")
-    unless $?.success?
-        puts "Compilation failed."
-        exit(1)
-    end
-
     if fns.empty?
         fns = Dir.glob("#{dir}/*").sort
         unless pattern.nil?
@@ -115,12 +109,14 @@ if __FILE__ == $0
         use_bfs: false,
         timeout: nil,
         parallel: false,
+        classpath: '.',
     }
     opt = OptionParser.new
     opt.on('--no-prune') {|_| options[:no_prune] = true}
     opt.on('--bfs') {|_| options[:use_bfs] = true}
     opt.on('--parallel') {|_| options[:parallel] = true}
     opt.on('--timeout=seconds') {|s| options[:timeout] = s.to_f}
+    opt.on('-c', '--classpath=PATH') {|s| options[:classpath] = s}
     opt.on('-d', '--dir=Directory') {|s| dir = s}
     opt.on('-p', '--pattern=regexp') {|s| pattern = Regexp.new(s)}
     opt.on('-e', '--exclude=regexp') {|s| exclude = Regexp.new(s)}
