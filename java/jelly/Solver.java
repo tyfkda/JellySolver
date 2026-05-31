@@ -92,12 +92,12 @@ public class Solver {
 
             final int nextStep = step + 1;
             enumerateNext(currentStage, (nextStage, move) -> {
+                nextStage.freeze();
                 if (!nodes.containsKey(nextStage)) {
                     nodes.put(nextStage, new NodeHistory(currentStage, move));
                     if (!useBfs) {
                         nextStage.distance = nextStage.estimateDistance();
                     }
-                    nextStage.freeze();
                     que.add(new SearchNode(nextStage, nextStep, useBfs));
                 }
             });
