@@ -339,7 +339,10 @@ impl Solver {
                 if !self.quiet {
                     eprintln!("\rSolved!\x1b[0K");
                 }
-                return Some(Self::extract_moves(&nodes, &current_stage));
+                let moves = Self::extract_moves(&nodes, &current_stage);
+                std::mem::forget(nodes);
+                std::mem::forget(queue);
+                return Some(moves);
             }
 
             let next_step = step + 1;
@@ -587,6 +590,8 @@ impl Solver {
                 eprintln!("\rSolved!\x1b[0K");
             }
             let moves = Self::extract_moves_dashmap(&nodes, &goal);
+            std::mem::forget(nodes);
+            std::mem::forget(queue);
             Some(moves)
         } else {
             None
