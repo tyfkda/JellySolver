@@ -285,8 +285,8 @@ impl Solver {
             que_astar.push(start_node);
         }
 
-        let nodes = Arc::new(Mutex::new(HashMap::new()));
-        nodes.lock().unwrap().insert(stage.clone(), NodeHistory { prev_stage: None, move_op: None });
+        let nodes = Arc::new(dashmap::DashMap::new());
+        nodes.insert(stage.clone(), NodeHistory { prev_stage: None, move_op: None });
 
         let num_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
         let active_workers = Arc::new(AtomicUsize::new(0));
@@ -447,27 +447,28 @@ impl Solver {
                         let mut ns = next_stage;
                         ns.freeze();
 
-                        let mut ns_nodes = nodes_clone.lock().unwrap();
-                        if !ns_nodes.contains_key(&ns) {
-                            ns_nodes.insert(ns.clone(), NodeHistory {
-                                prev_stage: Some(current_stage_clone.clone()),
-                                move_op: Some(move_op),
-                            });
-                            drop(ns_nodes); // ロック解放
-
-                            if !use_bfs {
-                                ns.distance = ns.estimate_distance();
+                        use dashmap::mapref::entry::Entry;
+                        match nodes_clone.entry(ns.clone()) {
+                            Entry::Vacant(e) => {
+                                e.insert(NodeHistory {
+                                    prev_stage: Some(current_stage_clone.clone()),
+                                    move_op: Some(move_op),
+                                });
+                                if !use_bfs {
+                                    ns.distance = ns.estimate_distance();
+                                }
+                                let next_node = SearchNode {
+                                    stage: ns.clone(),
+                                    step: next_step,
+                                    f_score: if use_bfs { 0 } else { ns.distance + next_step },
+                                };
+                                if use_bfs {
+                                    que_bfs_clone.push(next_node);
+                                } else {
+                                    que_astar_clone.push(next_node);
+                                }
                             }
-                            let next_node = SearchNode {
-                                stage: ns.clone(),
-                                step: next_step,
-                                f_score: if use_bfs { 0 } else { ns.distance + next_step },
-                            };
-                            if use_bfs {
-                                que_bfs_clone.push(next_node);
-                            } else {
-                                que_astar_clone.push(next_node);
-                            }
+                            Entry::Occupied(_) => {}
                         }
                     }));
 
@@ -494,8 +495,7 @@ impl Solver {
             if !self.quiet {
                 eprintln!("\rSolved!\x1b[0K");
             }
-            let ns_nodes = nodes.lock().unwrap();
-            let moves = Self::extract_moves(&ns_nodes, &goal);
+            let moves = Self::extract_moves_dashmap(&nodes, &goal);
             Some(moves)
         } else {
             None
@@ -511,6 +511,23 @@ impl Solver {
             }
             if let Some(prev) = &history.prev_stage {
                 curr = prev;
+            } else {
+                break;
+            }
+        }
+        moves.reverse();
+        moves
+    }
+
+    fn extract_moves_dashmap(nodes: &dashmap::DashMap<Stage, NodeHistory>, goal_stage: &Stage) -> Vec<Move> {
+        let mut moves = Vec::new();
+        let mut curr = goal_stage.clone();
+        while let Some(history) = nodes.get(&curr) {
+            if let Some(move_op) = history.move_op {
+                moves.push(move_op);
+            }
+            if let Some(prev) = &history.prev_stage {
+                curr = prev.clone();
             } else {
                 break;
             }
