@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 dashmap = "5.5.3"
+mimalloc = "0.1.39"

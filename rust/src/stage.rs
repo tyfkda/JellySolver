@@ -19,6 +19,7 @@ pub struct Stage {
     pub distance: i32,
     sorted_jellies_cache: Option<Vec<Arc<Jelly>>>,
     sorted_hiddens_cache: Option<Vec<Hidden>>,
+    pub hash_code: u64,
 }
 
 impl Stage {
@@ -30,6 +31,7 @@ impl Stage {
             distance: 0,
             sorted_jellies_cache: None,
             sorted_hiddens_cache: None,
+            hash_code: 0,
         }
     }
 
@@ -52,6 +54,39 @@ impl Stage {
         } else {
             self.sorted_hiddens_cache = None;
         }
+
+        self.hash_code = self.calculate_hash();
+    }
+
+    fn calculate_hash(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut state = std::collections::hash_map::DefaultHasher::new();
+        
+        if let Some(cache) = &self.sorted_jellies_cache {
+            cache.hash(&mut state);
+        } else {
+            let mut list = self.jellies.clone();
+            list.sort();
+            list.hash(&mut state);
+        }
+
+        if let Some(hiddens) = &self.hiddens {
+            if let Some(cache) = &self.sorted_hiddens_cache {
+                cache.hash(&mut state);
+            } else {
+                let mut list = hiddens.clone();
+                list.sort_by(|a, b| {
+                    a.x.cmp(&b.x)
+                        .then_with(|| a.y.cmp(&b.y))
+                        .then_with(|| a.color.cmp(&b.color))
+                        .then_with(|| a.dx.cmp(&b.dx))
+                        .then_with(|| a.dy.cmp(&b.dy))
+                        .then_with(|| a.link.cmp(&b.link))
+                });
+                list.hash(&mut state);
+            }
+        }
+        state.finish()
     }
 
     pub fn height(&self) -> usize {
@@ -549,67 +584,22 @@ impl Stage {
 
 impl PartialEq for Stage {
     fn eq(&self, other: &Self) -> bool {
+        if self.hash_code != other.hash_code {
+            return false;
+        }
         if self.wall_lines != other.wall_lines {
             return false;
         }
 
-        let this_sorted = match &self.sorted_jellies_cache {
-            Some(_) => None,
-            None => {
-                let mut list = self.jellies.clone();
-                list.sort();
-                Some(list)
-            }
-        };
-        let other_sorted = match &other.sorted_jellies_cache {
-            Some(_) => None,
-            None => {
-                let mut list = other.jellies.clone();
-                list.sort();
-                Some(list)
-            }
-        };
-
-        let this_ref = this_sorted.as_ref().unwrap_or_else(|| self.sorted_jellies_cache.as_ref().unwrap());
-        let other_ref = other_sorted.as_ref().unwrap_or_else(|| other.sorted_jellies_cache.as_ref().unwrap());
+        let this_ref = self.sorted_jellies_cache.as_ref().unwrap();
+        let other_ref = other.sorted_jellies_cache.as_ref().unwrap();
 
         if this_ref != other_ref {
             return false;
         }
 
-        let this_h = match &self.sorted_hiddens_cache {
-            Some(_) => None,
-            None => self.hiddens.as_ref().map(|hiddens| {
-                let mut list = hiddens.clone();
-                list.sort_by(|a, b| {
-                    a.x.cmp(&b.x)
-                        .then_with(|| a.y.cmp(&b.y))
-                        .then_with(|| a.color.cmp(&b.color))
-                        .then_with(|| a.dx.cmp(&b.dx))
-                        .then_with(|| a.dy.cmp(&b.dy))
-                        .then_with(|| a.link.cmp(&b.link))
-                });
-                list
-            }),
-        };
-        let other_h = match &other.sorted_hiddens_cache {
-            Some(_) => None,
-            None => other.hiddens.as_ref().map(|hiddens| {
-                let mut list = hiddens.clone();
-                list.sort_by(|a, b| {
-                    a.x.cmp(&b.x)
-                        .then_with(|| a.y.cmp(&b.y))
-                        .then_with(|| a.color.cmp(&b.color))
-                        .then_with(|| a.dx.cmp(&b.dx))
-                        .then_with(|| a.dy.cmp(&b.dy))
-                        .then_with(|| a.link.cmp(&b.link))
-                });
-                list
-            }),
-        };
-
-        let this_h_ref = this_h.as_ref().or(self.sorted_hiddens_cache.as_ref());
-        let other_h_ref = other_h.as_ref().or(other.sorted_hiddens_cache.as_ref());
+        let this_h_ref = self.sorted_hiddens_cache.as_ref();
+        let other_h_ref = other.sorted_hiddens_cache.as_ref();
 
         this_h_ref == other_h_ref
     }
@@ -617,31 +607,6 @@ impl PartialEq for Stage {
 
 impl std::hash::Hash for Stage {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match &self.sorted_jellies_cache {
-            Some(cache) => cache.hash(state),
-            None => {
-                let mut list = self.jellies.clone();
-                list.sort();
-                list.hash(state);
-            }
-        }
-
-        if let Some(hiddens) = &self.hiddens {
-            match &self.sorted_hiddens_cache {
-                Some(cache) => cache.hash(state),
-                None => {
-                    let mut list = hiddens.clone();
-                    list.sort_by(|a, b| {
-                        a.x.cmp(&b.x)
-                            .then_with(|| a.y.cmp(&b.y))
-                            .then_with(|| a.color.cmp(&b.color))
-                            .then_with(|| a.dx.cmp(&b.dx))
-                            .then_with(|| a.dy.cmp(&b.dy))
-                            .then_with(|| a.link.cmp(&b.link))
-                    });
-                    list.hash(state);
-                }
-            }
-        }
+        self.hash_code.hash(state);
     }
 }

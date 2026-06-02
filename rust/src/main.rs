@@ -6,6 +6,9 @@ mod stage;
 mod parser;
 mod solver;
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use stage::Stage;
 use solver::{Solver, Move};
 
