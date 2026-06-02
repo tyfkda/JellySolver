@@ -141,6 +141,116 @@ impl<T> ThreadSafeQueue<T> {
     }
 }
 
+// 探索戦略（SearchStrategy）の定義
+pub trait SearchStrategy: Send + Sync + Copy + 'static {
+    fn prepare_stage(&self, stage: &mut Stage);
+    fn compute_f_score(&self, stage: &Stage, step: i32) -> i32;
+}
+
+#[derive(Clone, Copy)]
+struct BfsStrategy;
+impl SearchStrategy for BfsStrategy {
+    fn prepare_stage(&self, _stage: &mut Stage) {}
+    fn compute_f_score(&self, _stage: &Stage, _step: i32) -> i32 {
+        0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct AStarStrategy;
+impl SearchStrategy for AStarStrategy {
+    fn prepare_stage(&self, stage: &mut Stage) {
+        stage.distance = stage.estimate_distance();
+    }
+    fn compute_f_score(&self, stage: &Stage, step: i32) -> i32 {
+        stage.distance + step
+    }
+}
+
+// シングルスレッド用のキュー（SolverQueue）の定義
+trait SolverQueue {
+    fn push(&mut self, node: SearchNode);
+    fn pop(&mut self) -> Option<SearchNode>;
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+struct BfsQueue(VecDeque<SearchNode>);
+impl BfsQueue {
+    fn new() -> Self {
+        Self(VecDeque::new())
+    }
+}
+impl SolverQueue for BfsQueue {
+    fn push(&mut self, node: SearchNode) {
+        self.0.push_back(node);
+    }
+    fn pop(&mut self) -> Option<SearchNode> {
+        self.0.pop_front()
+    }
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+struct AStarQueue(BinaryHeap<Reverse<SearchNode>>);
+impl AStarQueue {
+    fn new() -> Self {
+        Self(BinaryHeap::new())
+    }
+}
+impl SolverQueue for AStarQueue {
+    fn push(&mut self, node: SearchNode) {
+        self.0.push(Reverse(node));
+    }
+    fn pop(&mut self) -> Option<SearchNode> {
+        self.0.pop().map(|Reverse(n)| n)
+    }
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+// マルチスレッド用のキュー（ThreadSafeSolverQueue）の定義
+trait ThreadSafeSolverQueue: Send + Sync {
+    fn push(&self, node: SearchNode);
+    fn pop(&self, timeout: Duration) -> Option<SearchNode>;
+    fn size(&self) -> usize;
+    fn is_empty(&self) -> bool;
+}
+
+impl ThreadSafeSolverQueue for ThreadSafeQueue<SearchNode> {
+    fn push(&self, node: SearchNode) {
+        self.push(node);
+    }
+    fn pop(&self, timeout: Duration) -> Option<SearchNode> {
+        self.pop(timeout)
+    }
+    fn size(&self) -> usize {
+        self.size()
+    }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl ThreadSafeSolverQueue for ThreadSafePriorityQueue<SearchNode> {
+    fn push(&self, node: SearchNode) {
+        self.push(node);
+    }
+    fn pop(&self, timeout: Duration) -> Option<SearchNode> {
+        self.pop(timeout)
+    }
+    fn size(&self) -> usize {
+        self.size()
+    }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+
 pub struct Solver {
     no_prune: bool,
     use_bfs: bool,
@@ -180,46 +290,44 @@ impl Solver {
         }
     }
 
-    fn solve_sequential(&mut self, mut stage: Stage) -> Option<Vec<Move>> {
-        if !self.use_bfs {
-            stage.distance = stage.estimate_distance();
+    fn solve_sequential(&mut self, stage: Stage) -> Option<Vec<Move>> {
+        if self.use_bfs {
+            self.solve_sequential_impl(stage, BfsQueue::new(), BfsStrategy)
+        } else {
+            self.solve_sequential_impl(stage, AStarQueue::new(), AStarStrategy)
         }
-        stage.freeze();
+    }
 
-        // 優先度付きキューと探索進行
-        let mut que_bfs = VecDeque::new();
-        let mut que_astar = BinaryHeap::new();
+    fn solve_sequential_impl<Q, S>(&mut self, mut stage: Stage, mut queue: Q, strategy: S) -> Option<Vec<Move>>
+    where
+        Q: SolverQueue,
+        S: SearchStrategy,
+    {
+        strategy.prepare_stage(&mut stage);
+        stage.freeze();
 
         let start_node = SearchNode {
             stage: stage.clone(),
             step: 0,
-            f_score: if self.use_bfs { 0 } else { stage.distance },
+            f_score: strategy.compute_f_score(&stage, 0),
         };
 
-        if self.use_bfs {
-            que_bfs.push_back(start_node);
-        } else {
-            que_astar.push(Reverse(start_node));
-        }
+        queue.push(start_node);
 
         let mut nodes = HashMap::new();
         nodes.insert(stage.clone(), NodeHistory { prev_stage: None, move_op: None });
 
         let mut check_count = 0;
 
-        while (self.use_bfs && !que_bfs.is_empty()) || (!self.use_bfs && !que_astar.is_empty()) {
-            let node = if self.use_bfs {
-                que_bfs.pop_front().unwrap()
-            } else {
-                que_astar.pop().unwrap().0
-            };
+        while !queue.is_empty() {
+            let node = queue.pop().unwrap();
 
             let current_stage = node.stage;
             let step = node.step;
             check_count += 1;
 
             if !self.quiet && check_count % 1000 == 0 {
-                eprint!("\rCheck={}, left={}\x1b[0K", check_count, if self.use_bfs { que_bfs.len() } else { que_astar.len() });
+                eprint!("\rCheck={}, left={}\x1b[0K", check_count, queue.len());
             }
 
             if !self.no_prune && self.unsolvable(&current_stage) {
@@ -243,19 +351,13 @@ impl Solver {
                         prev_stage: Some(current_stage.clone()),
                         move_op: Some(move_op),
                     });
-                    if !self.use_bfs {
-                        ns.distance = ns.estimate_distance();
-                    }
+                    strategy.prepare_stage(&mut ns);
                     let next_node = SearchNode {
                         stage: ns.clone(),
                         step: next_step,
-                        f_score: if self.use_bfs { 0 } else { ns.distance + next_step },
+                        f_score: strategy.compute_f_score(&ns, next_step),
                     };
-                    if self.use_bfs {
-                        que_bfs.push_back(next_node);
-                    } else {
-                        que_astar.push(Reverse(next_node));
-                    }
+                    queue.push(next_node);
                 }
             });
         }
@@ -264,26 +366,29 @@ impl Solver {
         None
     }
 
-    fn solve_parallel(&mut self, mut stage: Stage) -> Option<Vec<Move>> {
-        if !self.use_bfs {
-            stage.distance = stage.estimate_distance();
+    fn solve_parallel(&mut self, stage: Stage) -> Option<Vec<Move>> {
+        if self.use_bfs {
+            self.solve_parallel_impl(stage, Arc::new(ThreadSafeQueue::new()), BfsStrategy)
+        } else {
+            self.solve_parallel_impl(stage, Arc::new(ThreadSafePriorityQueue::new()), AStarStrategy)
         }
-        stage.freeze();
+    }
 
-        let que_bfs = Arc::new(ThreadSafeQueue::new());
-        let que_astar = Arc::new(ThreadSafePriorityQueue::new());
+    fn solve_parallel_impl<Q, S>(&mut self, mut stage: Stage, queue: Arc<Q>, strategy: S) -> Option<Vec<Move>>
+    where
+        Q: ThreadSafeSolverQueue + 'static,
+        S: SearchStrategy,
+    {
+        strategy.prepare_stage(&mut stage);
+        stage.freeze();
 
         let start_node = SearchNode {
             stage: stage.clone(),
             step: 0,
-            f_score: if self.use_bfs { 0 } else { stage.distance },
+            f_score: strategy.compute_f_score(&stage, 0),
         };
 
-        if self.use_bfs {
-            que_bfs.push(start_node);
-        } else {
-            que_astar.push(start_node);
-        }
+        queue.push(start_node);
 
         let nodes = Arc::new(dashmap::DashMap::new());
         nodes.insert(stage.clone(), NodeHistory { prev_stage: None, move_op: None });
@@ -297,14 +402,12 @@ impl Solver {
         let mut threads = Vec::new();
 
         for _ in 0..num_threads {
-            let que_bfs = Arc::clone(&que_bfs);
-            let que_astar = Arc::clone(&que_astar);
+            let queue = Arc::clone(&queue);
             let nodes = Arc::clone(&nodes);
             let active_workers = Arc::clone(&active_workers);
             let global_check_count = Arc::clone(&global_check_count);
             let goal_stage = Arc::clone(&goal_stage);
             let cv_lock = Arc::clone(&cv_lock);
-            let use_bfs = self.use_bfs;
             let quiet = self.quiet;
             let no_prune = self.no_prune;
 
@@ -390,15 +493,10 @@ impl Solver {
                 };
 
                 while goal_stage.lock().unwrap().is_none() {
-                    let node = if use_bfs {
-                        que_bfs.pop(Duration::from_millis(10))
-                    } else {
-                        que_astar.pop(Duration::from_millis(10))
-                    };
+                    let node = queue.pop(Duration::from_millis(10));
 
                     if node.is_none() {
-                        let is_empty = if use_bfs { que_bfs.is_empty() } else { que_astar.is_empty() };
-                        if active_workers.load(Ordering::Relaxed) == 0 && is_empty {
+                        if active_workers.load(Ordering::Relaxed) == 0 && queue.is_empty() {
                             let (lock, cvar) = &*cv_lock;
                             let mut finished = lock.lock().unwrap();
                             *finished = true;
@@ -416,8 +514,7 @@ impl Solver {
                     let current_check = global_check_count.fetch_add(1, Ordering::Relaxed) + 1;
 
                     if !quiet && current_check % 1000 == 0 {
-                        let que_len = if use_bfs { que_bfs.size() } else { que_astar.size() };
-                        eprint!("\rCheck={}, left={}\x1b[0K", current_check, que_len);
+                        eprint!("\rCheck={}, left={}\x1b[0K", current_check, queue.size());
                     }
 
                     if !no_prune && unsolvable_local(&current_stage) {
@@ -440,8 +537,7 @@ impl Solver {
 
                     let next_step = step + 1;
                     let current_stage_clone = current_stage.clone();
-                    let que_bfs_clone = Arc::clone(&que_bfs);
-                    let que_astar_clone = Arc::clone(&que_astar);
+                    let queue_clone = Arc::clone(&queue);
                     let nodes_clone = Arc::clone(&nodes);
                     enumerate_next_local(&current_stage, Box::new(move |next_stage, move_op| {
                         let mut ns = next_stage;
@@ -454,19 +550,13 @@ impl Solver {
                                     prev_stage: Some(current_stage_clone.clone()),
                                     move_op: Some(move_op),
                                 });
-                                if !use_bfs {
-                                    ns.distance = ns.estimate_distance();
-                                }
+                                strategy.prepare_stage(&mut ns);
                                 let next_node = SearchNode {
                                     stage: ns.clone(),
                                     step: next_step,
-                                    f_score: if use_bfs { 0 } else { ns.distance + next_step },
+                                    f_score: strategy.compute_f_score(&ns, next_step),
                                 };
-                                if use_bfs {
-                                    que_bfs_clone.push(next_node);
-                                } else {
-                                    que_astar_clone.push(next_node);
-                                }
+                                queue_clone.push(next_node);
                             }
                             Entry::Occupied(_) => {}
                         }
@@ -481,8 +571,7 @@ impl Solver {
         let (lock, cvar) = &*cv_lock;
         let mut finished = lock.lock().unwrap();
         while !*finished {
-            let is_empty = if self.use_bfs { que_bfs.is_empty() } else { que_astar.is_empty() };
-            if active_workers.load(Ordering::Relaxed) == 0 && is_empty {
+            if active_workers.load(Ordering::Relaxed) == 0 && queue.is_empty() {
                 break;
             }
             finished = cvar.wait_timeout(finished, Duration::from_millis(100)).unwrap().0;
