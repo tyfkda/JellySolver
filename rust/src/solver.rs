@@ -543,22 +543,24 @@ impl Solver {
                         let mut ns = next_stage;
                         ns.freeze();
 
-                        use dashmap::mapref::entry::Entry;
-                        match nodes_clone.entry(ns.clone()) {
-                            Entry::Vacant(e) => {
-                                e.insert(NodeHistory {
-                                    prev_stage: Some(current_stage_clone.clone()),
-                                    move_op: Some(move_op),
-                                });
-                                strategy.prepare_stage(&mut ns);
-                                let next_node = SearchNode {
-                                    stage: ns.clone(),
-                                    step: next_step,
-                                    f_score: strategy.compute_f_score(&ns, next_step),
-                                };
-                                queue_clone.push(next_node);
+                        if !nodes_clone.contains_key(&ns) {
+                            use dashmap::mapref::entry::Entry;
+                            match nodes_clone.entry(ns.clone()) {
+                                Entry::Vacant(e) => {
+                                    e.insert(NodeHistory {
+                                        prev_stage: Some(current_stage_clone.clone()),
+                                        move_op: Some(move_op),
+                                    });
+                                    strategy.prepare_stage(&mut ns);
+                                    let next_node = SearchNode {
+                                        stage: ns.clone(),
+                                        step: next_step,
+                                        f_score: strategy.compute_f_score(&ns, next_step),
+                                    };
+                                    queue_clone.push(next_node);
+                                }
+                                Entry::Occupied(_) => {}
                             }
-                            Entry::Occupied(_) => {}
                         }
                     }));
 

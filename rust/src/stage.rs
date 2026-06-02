@@ -131,17 +131,16 @@ impl Stage {
 
     pub fn unfrozen_jelly(&mut self, id: usize) -> Option<&mut Jelly> {
         let parent_id = self.find_group(id);
-        let group_ids: Vec<usize> = self.jellies.iter()
-            .filter(|j| j.parent_id == parent_id)
-            .map(|j| j.id)
-            .collect();
-        for gid in group_ids {
-            if let Some(idx) = self.jellies.iter().position(|j| j.id == gid) {
+        let mut target_idx = None;
+        for idx in 0..self.jellies.len() {
+            if self.jellies[idx].parent_id == parent_id {
                 Arc::make_mut(&mut self.jellies[idx]);
+                if self.jellies[idx].id == id {
+                    target_idx = Some(idx);
+                }
             }
         }
-        let target_idx = self.jellies.iter().position(|j| j.id == id)?;
-        Some(Arc::make_mut(&mut self.jellies[target_idx]))
+        target_idx.map(|idx| Arc::make_mut(&mut self.jellies[idx]))
     }
 
     pub fn find_group(&self, id: usize) -> usize {

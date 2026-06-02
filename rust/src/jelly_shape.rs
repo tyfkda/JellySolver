@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use crate::point::Point;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -16,10 +15,10 @@ struct JellyShapeInner {
     adjacent_lines: Vec<i32>,
 }
 
-static SHAPES: OnceLock<Mutex<HashMap<Vec<Point>, JellyShape>>> = OnceLock::new();
+static SHAPES: OnceLock<dashmap::DashMap<Vec<Point>, JellyShape>> = OnceLock::new();
 
-fn get_shapes() -> &'static Mutex<HashMap<Vec<Point>, JellyShape>> {
-    SHAPES.get_or_init(|| Mutex::new(HashMap::new()))
+fn get_shapes() -> &'static dashmap::DashMap<Vec<Point>, JellyShape> {
+    SHAPES.get_or_init(|| dashmap::DashMap::new())
 }
 
 impl JellyShape {
@@ -27,11 +26,10 @@ impl JellyShape {
         let mut sorted = positions;
         sorted.sort();
 
-        let shapes_mutex = get_shapes();
-        let mut shapes = shapes_mutex.lock().unwrap();
+        let shapes = get_shapes();
 
         if let Some(shape) = shapes.get(&sorted) {
-            return shape.clone();
+            return shape.value().clone();
         }
 
         let mut max_w = 0;
