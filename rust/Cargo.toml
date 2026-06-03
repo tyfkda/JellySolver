@@ -1,0 +1,8 @@
+[package]
+name = "rust_jelly_solver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dashmap = "5.5.3"
+mimalloc = "0.1.39"
